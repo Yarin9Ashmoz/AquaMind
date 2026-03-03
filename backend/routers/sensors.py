@@ -38,8 +38,8 @@ def create_sensor(data: dict, db: Session = Depends(get_db)):
         moisture=data["moisture"], 
         last_update=datetime.utcnow(), 
         ) 
-        db.add(sensor) 
-        db.commit() 
+    db.add(sensor) 
+    db.commit() 
     return {"status": "ok"}
 
 @router.post("/{sensor_id}/rename")
