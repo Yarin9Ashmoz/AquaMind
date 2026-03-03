@@ -1,0 +1,58 @@
+# Flutter/Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+flutter_*.png
+
+# Flutter specific
+**/doc/api/
+**/ios/Flutter/.last_build_id
+
+# Android
+android/.gradle/
+android/.idea/
+android/local.properties
+android/app/build/
+android/build/
+*.iml
+
+# iOS
+ios/Pods/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/App.framework
+ios/Flutter/engine/
+ios/Runner.xcworkspace/xcuserdata/
+ios/Runner.xcodeproj/project.xcworkspace/xcuserdata/
+ios/build/
+
+# Xcode
+*.xcuserstate
+*.xcworkspace
+*.xcuserdata
+*.moved-aside
+DerivedData/
+
+# VS Code
+.vscode/
+.history/
+
+# Backend Python
+backend/__pycache__/
+backend/**/*.pyc
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+
+# Python virtual env
+venv/
+env/
+
+# Logs
+*.log
+
+# System files
+.DS_Store
+Thumbs.db
