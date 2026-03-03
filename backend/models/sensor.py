@@ -9,6 +9,5 @@ class Sensor(Base):
     name = Column(String)
     plant_type = Column(String)
     moisture = Column(Float)
-    last_update = Column(DateaTime, default=datetime.utcnow)
+    last_update = Column(DateTime, default=datetime.utcnow)
 
-    
