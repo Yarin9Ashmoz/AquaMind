@@ -5,7 +5,7 @@ class ApiService {
   final String baseUrl = "https://aquamind-0xli.onrender.com";
 
   Future<List<dynamic>> getSensors() async {
-    final url = Uri.parse("$baseUrl/sensors");
+    final url = Uri.parse("$baseUrl/sensors/");
     final res = await http.get(url);
 
     if (res.statusCode != 200) {
@@ -16,7 +16,7 @@ class ApiService {
   }
 
   Future<void> renameSensor(String sensorId, String newName) async {
-    final url = Uri.parse("$baseUrl/sensors/$sensorId/rename");
+    final url = Uri.parse("$baseUrl/sensors/$sensorId/rename/");
 
     final res = await http.post(
       url,
@@ -35,7 +35,7 @@ class ApiService {
     required String plantType,
     required int moisture,
   }) async {
-    final url = Uri.parse("$baseUrl/sensors/create");
+    final url = Uri.parse("$baseUrl/sensors/create/");
 
     final res = await http.post(
       url,
