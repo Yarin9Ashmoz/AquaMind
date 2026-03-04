@@ -21,7 +21,7 @@ class Sensor {
       name: json["name"],
       moisture: json["moisture"],
       plantType: json["plantType"],
-      locationType: json["locationType"],
+      locationType: json["locationType"] ?? "indoor",
       lastUpdate: DateTime.parse(json["lastUpdate"]),
     );
   }

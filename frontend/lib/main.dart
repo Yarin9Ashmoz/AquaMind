@@ -46,8 +46,8 @@ class MyApp extends StatelessWidget {
         ),
       ),
 
-      // 👇 זה המסך הראשי שלך
+      
       home: const HomeScreen(),
-    ); // 👈 סוגר את MaterialApp
+    ); 
   }
 }

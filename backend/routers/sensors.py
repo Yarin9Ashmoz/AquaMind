@@ -14,7 +14,13 @@ def get_db():
         db.close()
 
 
-@router.get("/")
+@router.get("/debug")
+def debug(db: Session = Depends(get_db)):
+    sensors = db.query(Sensor).all()
+    return sensors
+
+
+@router.get("")
 def get_sensors(db: Session = Depends(get_db)):
     sensors = db.query(Sensor).all()
     return [
