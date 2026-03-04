@@ -4,6 +4,8 @@ import 'add_sensor_success_screen.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:wifi_iot/wifi_iot.dart';
+import '../../../data/services/api_service.dart';
+
 
 class AddSensorWifiScreen extends StatefulWidget {
   final BluetoothDevice device;
@@ -131,6 +133,14 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
                           Uint8List.fromList(utf8.encode(jsonString)),
                           withoutResponse: false,
                         );
+
+                        await ApiService().createSensor(
+                          sensorId: widget.device.id.toString(),
+                          name: widget.sensorName,
+                          plantType: widget.plantType,
+                          moisture: 0, 
+                        );
+
 
                         setState(() => isLoading = false);
 
