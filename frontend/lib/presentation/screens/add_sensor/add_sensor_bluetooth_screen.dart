@@ -20,21 +20,31 @@ class _AddSensorBluetoothScreenState extends State<AddSensorBluetoothScreen> {
     startScan();
   }
 
+  @override
+  void dispose() {
+    FlutterBluePlus.stopScan();
+    super.dispose();
+  }
+
   void startScan() async {
     setState(() => scanning = true);
 
     FlutterBluePlus.startScan(timeout: const Duration(seconds: 4));
 
     FlutterBluePlus.scanResults.listen((results) {
-      setState(() {
-        devices = results
-            .where((r) => r.device.name.contains("ESP32"))
-            .toList();
-      });
+      if (mounted) {
+        setState(() {
+          devices = results
+              .where((r) => r.device.name.contains("ESP32"))
+              .toList();
+        });
+      }
     });
 
     await Future.delayed(const Duration(seconds: 4));
-    setState(() => scanning = false);
+    if (mounted) {
+      setState(() => scanning = false);
+    }
   }
 
   @override

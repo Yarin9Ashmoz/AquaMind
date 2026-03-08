@@ -25,29 +25,62 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
+
       theme: ThemeData(
-        primaryColor: Colors.green,
+        useMaterial3: true,
+
+        // צבעי בסיס ניטרליים
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.grey,
+          primary: Colors.black,
+          secondary: Colors.grey.shade700,
+        ),
+
+        // רקע כללי בהיר
         scaffoldBackgroundColor: Colors.grey.shade100,
+
+        // AppBar נקי ולבן
         appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.green,
-          foregroundColor: Colors.white,
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
           elevation: 0,
+          centerTitle: true,
+          titleTextStyle: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w600,
+            color: Colors.black,
+          ),
         ),
+
+        // טקסטים נקיים
         textTheme: const TextTheme(
-          bodyMedium: TextStyle(fontSize: 18),
-          titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          bodyMedium: TextStyle(fontSize: 16, color: Colors.black87),
+          titleLarge: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
         ),
+
+        // כרטיסים מעוגלים עם צל עדין
         cardTheme: CardThemeData(
           color: Colors.white,
-          elevation: 3,
+          elevation: 2,
+          margin: EdgeInsets.symmetric(vertical: 8),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+
+        // כפתור + לבן בסגנון iOS
+        floatingActionButtonTheme: FloatingActionButtonThemeData(
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          elevation: 4,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(50),
           ),
         ),
       ),
 
-      
       home: const HomeScreen(),
-    ); 
+    );
   }
 }

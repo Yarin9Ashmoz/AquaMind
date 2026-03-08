@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../state/dashboard_state.dart';
-import '../sensors/sensors_screen.dart';
+import '../home/home_screen.dart';
 
 class AddSensorSuccessScreen extends StatelessWidget {
   const AddSensorSuccessScreen({super.key});
@@ -13,7 +13,7 @@ class AddSensorSuccessScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.check_circle, size: 80, color: Colors.green),
+            Icon(Icons.check_circle, size: 80, color: Colors.green.shade400),
             const SizedBox(height: 20),
             const Text(
               "Sensor Added Successfully!",
@@ -22,18 +22,17 @@ class AddSensorSuccessScreen extends StatelessWidget {
             const SizedBox(height: 30),
             ElevatedButton(
               onPressed: () async {
-                print("GO TO MY SENSORS CLICKED");
-
                 await context.read<DashboardState>().loadSensors();
 
-                Navigator.popUntil(context, (route) => route.isFirst);
-
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SensorsScreen()),
-                );
+                if (context.mounted) {
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (_) => const HomeScreen()),
+                    (route) => false,
+                  );
+                }
               },
-              child: const Text("Go to My Sensors"),
+              child: const Text("Back to Home"),
             ),
           ],
         ),

@@ -7,24 +7,30 @@ class DashboardState extends ChangeNotifier {
 
   List<Sensor> sensors = [];
   Sensor? selectedSensor;
-  bool isLoading = true;
+  bool isLoading = false;
+  String? error;
 
-  DashboardState(this.repo) {
-    loadSensors();
-  }
+  DashboardState(this.repo);
 
   Future<void> loadSensors() async {
-    isLoading = true;
-    notifyListeners();
+    try {
+      isLoading = true;
+      error = null;
+      notifyListeners();
 
-    sensors = await repo.getSensors();
+      sensors = await repo.getSensors();
 
-    if (sensors.isNotEmpty) {
-      selectedSensor = sensors.first;
+      if (sensors.isNotEmpty) {
+        selectedSensor = sensors.first;
+      }
+
+      isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      isLoading = false;
+      error = e.toString();
+      notifyListeners();
     }
-
-    isLoading = false;
-    notifyListeners();
   }
 
   String get statusText {
@@ -54,5 +60,21 @@ class DashboardState extends ChangeNotifier {
     }
 
     notifyListeners();
+  }
+
+  Future<void> createSensor({
+    required String sensorId,
+    required String name,
+    required String plantType,
+    required String locationType,
+    required int moisture,
+  }) async {
+    await repo.createSensor(
+      sensorId: sensorId,
+      name: name,
+      plantType: plantType,
+      locationType: locationType,
+      moisture: moisture,
+    );
   }
 }

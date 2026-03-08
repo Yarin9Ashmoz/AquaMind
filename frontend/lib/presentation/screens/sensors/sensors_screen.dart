@@ -29,6 +29,22 @@ class _SensorsScreenState extends State<SensorsScreen> {
 
       body: state.isLoading
           ? const Center(child: CircularProgressIndicator())
+          : state.error != null
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text("Error: ${state.error}"),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      state.loadSensors();
+                    },
+                    child: const Text("Retry"),
+                  ),
+                ],
+              ),
+            )
           : ListView.builder(
               itemCount: state.sensors.length,
               itemBuilder: (context, i) {
@@ -36,9 +52,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
 
                 return ListTile(
                   leading: Icon(
-                    s.plantType == "pot"
-                        ? Icons.local_florist
-                        : Icons.park,
+                    s.plantType == "pot" ? Icons.local_florist : Icons.park,
                   ),
                   title: Text(s.name),
                   subtitle: Text("Moisture: ${s.moisture}%"),
@@ -58,7 +72,9 @@ class _SensorsScreenState extends State<SensorsScreen> {
                               decoration: const InputDecoration(
                                 labelText: "Sensor Name",
                               ),
-                              onChanged: (value) => newName = value,
+                              onChanged: (value) {
+                                newName = value;
+                              },
                             ),
                             actions: [
                               TextButton(
@@ -68,9 +84,9 @@ class _SensorsScreenState extends State<SensorsScreen> {
                               TextButton(
                                 onPressed: () {
                                   context.read<DashboardState>().renameSensor(
-                                        s.sensorId,
-                                        newName,
-                                      );
+                                    s.sensorId,
+                                    newName,
+                                  );
                                   Navigator.pop(context);
                                 },
                                 child: const Text("Save"),
@@ -98,9 +114,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (_) => const AddSensorBluetoothScreen(),
-            ),
+            MaterialPageRoute(builder: (_) => const AddSensorBluetoothScreen()),
           );
         },
         child: const Icon(Icons.add),

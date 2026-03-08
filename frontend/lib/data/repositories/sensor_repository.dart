@@ -12,7 +12,22 @@ class SensorRepository {
   }
 
   Future<void> renameSensor(String sensorId, String newName) async {
-  await api.renameSensor(sensorId, newName);
-}
+    await api.renameSensor(sensorId, newName);
+  }
 
+  Future<void> createSensor({
+    required String sensorId,
+    required String name,
+    required String plantType,
+    required String locationType,
+    required int moisture,
+  }) async {
+    await api.createSensor(
+      sensorId: sensorId,
+      name: name,
+      plantType: plantType,
+      locationType: locationType,
+      moisture: moisture,
+    );
+  }
 }

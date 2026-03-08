@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:provider/provider.dart';
 import 'add_sensor_success_screen.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:wifi_iot/wifi_iot.dart';
-import '../../../data/services/api_service.dart';
-
+import '../../state/dashboard_state.dart';
 
 class AddSensorWifiScreen extends StatefulWidget {
   final BluetoothDevice device;
@@ -41,10 +41,20 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
   }
 
   Future<void> scanWifi() async {
-    List<WifiNetwork> result = await WiFiForIoTPlugin.loadWifiList();
-    setState(() {
-      networks = result;
-    });
+    try {
+      List<WifiNetwork> result = await WiFiForIoTPlugin.loadWifiList();
+      if (mounted) {
+        setState(() {
+          networks = result;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("WiFi scan failed: ${e.toString()}")),
+        );
+      }
+    }
   }
 
   @override
@@ -134,22 +144,29 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
                           withoutResponse: false,
                         );
 
-                        await ApiService().createSensor(
-                          sensorId: widget.device.id.toString(),
-                          name: widget.sensorName,
-                          plantType: widget.plantType,
-                          moisture: 0, 
-                        );
+                        try {
+                          await context.read<DashboardState>().createSensor(
+                            sensorId: widget.device.id.toString(),
+                            name: widget.sensorName,
+                            plantType: widget.plantType,
+                            locationType: widget.locationType,
+                            moisture: 0,
+                          );
 
+                          setState(() => isLoading = false);
 
-                        setState(() => isLoading = false);
-
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const AddSensorSuccessScreen(),
-                          ),
-                        );
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const AddSensorSuccessScreen(),
+                            ),
+                          );
+                        } catch (e) {
+                          setState(() => isLoading = false);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text("Error: ${e.toString()}")),
+                          );
+                        }
                       },
                 child: isLoading
                     ? const CircularProgressIndicator(color: Colors.white)
