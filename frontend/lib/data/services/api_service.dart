@@ -2,27 +2,37 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
+  // שנה את זה ל-"http://10.0.2.2:8000" אם אתה ב-Android Emulator עם Backend local
+  // שנה את זה ל-"http://192.168.1.X:8000" אם אתה ב-Device עם Backend local (החלף X)
   final String baseUrl = "https://aquamind-0xli.onrender.com";
-  final Duration timeout = const Duration(seconds: 10);
+  final Duration timeout = const Duration(seconds: 30);
 
   Future<List<dynamic>> getSensors() async {
     try {
       final url = Uri.parse("$baseUrl/sensors");
+      print("📡 Fetching sensors from: $url");
+
       final res = await http
           .get(url)
           .timeout(
             timeout,
             onTimeout: () {
-              throw Exception("Request timeout");
+              print("❌ Request timeout after ${timeout.inSeconds}s");
+              throw Exception("Request timeout after ${timeout.inSeconds}s");
             },
           );
+
+      print("✅ Response status: ${res.statusCode}");
 
       if (res.statusCode != 200) {
         throw Exception("Failed to load sensors: ${res.statusCode}");
       }
 
-      return jsonDecode(res.body);
+      final data = jsonDecode(res.body);
+      print("✅ Loaded ${data.length} sensors");
+      return data;
     } catch (e) {
+      print("❌ Error loading sensors: $e");
       throw Exception("Error loading sensors: $e");
     }
   }
