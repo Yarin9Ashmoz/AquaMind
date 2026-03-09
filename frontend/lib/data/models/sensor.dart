@@ -19,7 +19,7 @@ class Sensor {
     return Sensor(
       sensorId: json["sensorId"],
       name: json["name"],
-      moisture: json["moisture"],
+      moisture: (json['moisture'] as num).toInt(),
       plantType: json["plantType"],
       locationType: json["locationType"] ?? "indoor",
       lastUpdate: DateTime.parse(json["lastUpdate"]),

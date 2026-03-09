@@ -144,12 +144,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Icon(Icons.eco, size: 80, color: Colors.grey[400]),
             const SizedBox(height: 20),
             const Text(
-              "אין עדיין חיישנים",
+              "No Sensors Added Yet",
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             Text(
-              "לחץ על + כדי להוסיף חיישן חדש",
+              "Click on + to add a new sensor",
               style: TextStyle(fontSize: 16, color: Colors.grey[600]),
               textAlign: TextAlign.center,
             ),
