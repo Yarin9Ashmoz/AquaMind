@@ -8,6 +8,7 @@ class Sensor(Base):
     sensor_id = Column(String, unique=True, index=True)
     name = Column(String)
     plant_type = Column(String)
+    location_type = Column(String, default="indoor")
     moisture = Column(Float)
     last_update = Column(DateTime, default=datetime.utcnow)
 
