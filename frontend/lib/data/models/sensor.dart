@@ -17,12 +17,12 @@ class Sensor {
 
   factory Sensor.fromJson(Map<String, dynamic> json) {
     return Sensor(
-      sensorId: json["sensorId"],
+      sensorId: json["sensor_id"],
       name: json["name"],
-      moisture: (json['moisture'] as num).toInt(),
-      plantType: json["plantType"],
-      locationType: json["locationType"] ?? "indoor",
-      lastUpdate: DateTime.parse(json["lastUpdate"]),
+      moisture: (json["moisture"] as num).toInt(),
+      plantType: json["plant_type"],
+      locationType: json["location_type"] ?? "indoor",
+      lastUpdate: DateTime.parse(json["last_update"]),
     );
   }
 }
