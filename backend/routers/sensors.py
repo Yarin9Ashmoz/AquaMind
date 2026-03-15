@@ -64,10 +64,10 @@ def create_sensor(data: SensorCreate, db: Session = Depends(get_db)):
             last_update=datetime.utcnow(), 
         ) 
         db.add(sensor) 
-        db.commit() # כאן קורית השגיאה אם הטבלה לא קיימת
+        db.commit() 
         return {"status": "ok"}
     except Exception as e:
-        db.rollback() # חשוב! זה משחרר את ה-Transaction ומנקה את השגיאה
+        db.rollback()
         print(f"Database Error: {e}")
         return {"error": str(e)}, 500
 
