@@ -6,8 +6,7 @@ class AddSensorBluetoothScreen extends StatefulWidget {
   const AddSensorBluetoothScreen({super.key});
 
   @override
-  State<AddSensorBluetoothScreen> createState() =>
-      _AddSensorBluetoothScreenState();
+  State<AddSensorBluetoothScreen> createState() => _AddSensorBluetoothScreenState();
 }
 
 class _AddSensorBluetoothScreenState extends State<AddSensorBluetoothScreen> {
@@ -20,65 +19,72 @@ class _AddSensorBluetoothScreenState extends State<AddSensorBluetoothScreen> {
     startScan();
   }
 
-  @override
-  void dispose() {
-    FlutterBluePlus.stopScan();
-    super.dispose();
-  }
-
   void startScan() async {
-    setState(() => scanning = true);
+    setState(() {
+      scanning = true;
+      devices = [];
+    });
 
-    FlutterBluePlus.startScan(timeout: const Duration(seconds: 4));
-
-    FlutterBluePlus.scanResults.listen((results) {
+    // האזנה לתוצאות לפני תחילת הסריקה
+    var subscription = FlutterBluePlus.onScanResults.listen((results) {
       if (mounted) {
         setState(() {
           devices = results
-              .where((r) => r.device.name.contains("ESP32"))
+              .where((r) => r.device.platformName.toUpperCase().contains("AQUAMIND"))
               .toList();
         });
       }
     });
 
-    await Future.delayed(const Duration(seconds: 4));
-    if (mounted) {
-      setState(() => scanning = false);
+    try {
+      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 8));
+    } catch (e) {
+      print("Scan Error: $e");
     }
+
+    await Future.delayed(const Duration(seconds: 8));
+    subscription.cancel();
+    if (mounted) setState(() => scanning = false);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Select Sensor")),
-      body: scanning
+      body: scanning && devices.isEmpty
           ? const Center(child: CircularProgressIndicator())
           : devices.isEmpty
-          ? const Center(child: Text("No ESP32 devices found"))
-          : ListView.builder(
-              itemCount: devices.length,
-              itemBuilder: (context, i) {
-                final d = devices[i];
-
-                return ListTile(
-                  title: Text(d.device.name),
-                  subtitle: Text(d.device.id.toString()),
-                  onTap: () async {
-                    await d.device.connect();
-
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => AddSensorConfigScreen(
-                          deviceName: d.device.name,
-                          device: d.device, // ⬅️ מעבירים את ה‑device
-                        ),
-                      ),
+              ? Center(child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text("No AquaMind sensors found"),
+                    ElevatedButton(onPressed: startScan, child: const Text("Scan Again"))
+                  ],
+                ))
+              : ListView.builder(
+                  itemCount: devices.length,
+                  itemBuilder: (context, i) {
+                    final d = devices[i];
+                    return ListTile(
+                      leading: const Icon(Icons.bluetooth),
+                      title: Text(d.device.platformName),
+                      subtitle: Text(d.device.remoteId.toString()),
+                      onTap: () async {
+                        await FlutterBluePlus.stopScan();
+                        // המעבר לדף הבא קורה רק אחרי חיבור בסיסי
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => AddSensorConfigScreen(
+                              deviceName: d.device.platformName,
+                              device: d.device,
+                            ),
+                          ),
+                        );
+                      },
                     );
                   },
-                );
-              },
-            ),
+                ),
     );
   }
 }
