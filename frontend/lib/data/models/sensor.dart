@@ -16,14 +16,20 @@ class Sensor {
   });
 
   factory Sensor.fromJson(Map<String, dynamic> json) {
+    // Support both snake_case and camelCase payloads (backend can change)
+    final sensorId = json["sensor_id"] ?? json["sensorId"] ?? "";
+    final plantType = json["plant_type"] ?? json["plantType"] ?? "";
+    final locationType =
+        json["location_type"] ?? json["locationType"] ?? "indoor";
+    final lastUpdateRaw = json["last_update"] ?? json["lastUpdate"] ?? "";
+
     return Sensor(
-      sensorId: json["sensor_id"] ?? "",
+      sensorId: sensorId,
       name: json["name"] ?? "",
       moisture: (json["moisture"] as num?)?.toInt() ?? 0,
-      plantType: json["plant_type"] ?? "",
-      locationType: json["location_type"] ?? "indoor",
-      lastUpdate:
-          DateTime.tryParse(json["last_update"] ?? "") ?? DateTime.now(),
+      plantType: plantType,
+      locationType: locationType,
+      lastUpdate: DateTime.tryParse(lastUpdateRaw) ?? DateTime.now(),
     );
   }
 }

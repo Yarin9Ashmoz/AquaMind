@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from database.db import SessionLocal
 from models.sensor import Sensor
@@ -41,14 +43,13 @@ def get_sensors(db: Session = Depends(get_db)):
     sensors = db.query(Sensor).all()
     return [
         {
-            "sensorId": s.sensor_id,
+            "sensor_id": s.sensor_id,
             "name": s.name,
-            "plantType": s.plant_type,
-            "locationType": s.location_type,
+            "plant_type": s.plant_type,
+            "location_type": s.location_type,
             "moisture": s.moisture,
-            "lastUpdate": s.last_update
+            "last_update": s.last_update,
         }
-
         for s in sensors
     ]
 
@@ -95,6 +96,46 @@ def update_sensor_data(data: SensorUpdate, db: Session = Depends(get_db)):
     sensor.last_update = datetime.utcnow()
     
     db.commit()
-    
+
     print(f"✅ Success: Sensor {data.sensorId} updated to {data.moisture}%")
     return {"status": "updated", "new_moisture": sensor.moisture}
+
+
+@router.delete("/delete-all")
+def delete_all_sensors(db: Session = Depends(get_db)):
+    try:
+        num_deleted = db.query(Sensor).delete()
+        db.commit()
+        return {"message": f"Successfully deleted {num_deleted} sensors"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/delete")
+def delete_sensor(
+    sensorId: Optional[str] = Query(None),
+    name: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Delete a sensor by its ID or by its name.
+
+    If both `sensorId` and `name` are provided, both will be used to filter (AND).
+    """
+
+    if sensorId is None and name is None:
+        raise HTTPException(status_code=400, detail="Provide sensorId or name to delete")
+
+    query = db.query(Sensor)
+    if sensorId is not None:
+        query = query.filter(Sensor.sensor_id == sensorId)
+    if name is not None:
+        query = query.filter(Sensor.name == name)
+
+    deleted = query.delete(synchronize_session=False)
+    if deleted == 0:
+        raise HTTPException(status_code=404, detail="Sensor not found")
+
+    db.commit()
+    return {"deleted": deleted}
+

@@ -15,6 +15,14 @@ class SensorRepository {
     await api.renameSensor(sensorId, newName);
   }
 
+  Future<void> deleteAllSensors() async {
+    await api.deleteAllSensors();
+  }
+
+  Future<void> deleteSensor({String? sensorId, String? name}) async {
+    await api.deleteSensor(sensorId: sensorId, name: name);
+  }
+
   Future<void> createSensor({
     required String sensorId,
     required String name,

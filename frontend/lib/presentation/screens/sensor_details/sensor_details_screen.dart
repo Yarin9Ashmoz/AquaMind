@@ -17,6 +17,38 @@ class SensorDetailsScreen extends StatelessWidget {
         title: Text(sensor.name),
         actions: [
           IconButton(
+            icon: const Icon(Icons.delete_outline),
+            onPressed: () async {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Delete sensor'),
+                  content: const Text(
+                    'Are you sure you want to delete this sensor? This cannot be undone.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Cancel'),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                      ),
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text('Delete'),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirmed ?? false) {
+                await state.deleteSensorById(sensor.sensorId);
+                if (context.mounted) Navigator.pop(context);
+              }
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.edit),
             onPressed: () {
               _showRenameDialog(context, state, sensor);
@@ -29,8 +61,10 @@ class SensorDetailsScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Moisture: ${sensor.moisture}%",
-                style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              "Moisture: ${sensor.moisture}%",
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 8),
             Text("Status: ${state.statusText}"),
             const SizedBox(height: 8),
@@ -62,7 +96,11 @@ class SensorDetailsScreen extends StatelessWidget {
     );
   }
 
-  void _showRenameDialog(BuildContext context, DashboardState state, Sensor sensor) {
+  void _showRenameDialog(
+    BuildContext context,
+    DashboardState state,
+    Sensor sensor,
+  ) {
     String newName = sensor.name;
 
     showDialog(

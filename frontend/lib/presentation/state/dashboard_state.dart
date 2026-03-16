@@ -22,6 +22,8 @@ class DashboardState extends ChangeNotifier {
 
       if (sensors.isNotEmpty) {
         selectedSensor = sensors.first;
+      } else {
+        selectedSensor = null;
       }
 
       isLoading = false;
@@ -76,5 +78,34 @@ class DashboardState extends ChangeNotifier {
       locationType: locationType,
       moisture: moisture,
     );
+    await loadSensors();
+  }
+
+  Future<void> deleteAllSensors() async {
+    await repo.deleteAllSensors();
+
+    sensors = [];
+    selectedSensor = null;
+    notifyListeners();
+  }
+
+  Future<void> deleteSensorById(String sensorId) async {
+    await repo.deleteSensor(sensorId: sensorId);
+
+    sensors.removeWhere((s) => s.sensorId == sensorId);
+    if (selectedSensor?.sensorId == sensorId) {
+      selectedSensor = sensors.isNotEmpty ? sensors.first : null;
+    }
+    notifyListeners();
+  }
+
+  Future<void> deleteSensorByName(String name) async {
+    await repo.deleteSensor(name: name);
+
+    sensors.removeWhere((s) => s.name == name);
+    if (selectedSensor?.name == name) {
+      selectedSensor = sensors.isNotEmpty ? sensors.first : null;
+    }
+    notifyListeners();
   }
 }

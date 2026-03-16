@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../state/dashboard_state.dart'; // וודא שהנתיב ל-State נכון
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -15,6 +17,7 @@ class SettingsScreen extends StatelessWidget {
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.black),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -89,6 +92,54 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
+          _buildSectionTitle("Danger Zone"), // הוספת כותרת לאזור רגיש
+          Card(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.delete_forever, color: Colors.red),
+                  title: const Text(
+                    "Delete All Sensors",
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  subtitle: const Text("Wipe all data from the database"),
+                  trailing: const Icon(
+                    Icons.arrow_forward_ios,
+                    size: 16,
+                    color: Colors.red,
+                  ),
+                  onTap: () => _showDeleteConfirmation(context),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.person_remove, color: Colors.red),
+                  title: const Text(
+                    "Delete Sensor by Name/ID",
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    "Remove a single sensor from the database",
+                  ),
+                  trailing: const Icon(
+                    Icons.arrow_forward_ios,
+                    size: 16,
+                    color: Colors.red,
+                  ),
+                  onTap: () => _showDeleteSingleSensorDialog(context),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
           _buildSectionTitle("Cloud Server"),
           Card(
             shape: RoundedRectangleBorder(
@@ -133,6 +184,135 @@ class SettingsScreen extends StatelessWidget {
           color: Colors.grey[600],
           letterSpacing: 1.1,
         ),
+      ),
+    );
+  }
+
+  /// מציג דיאלוג אישור לפני מחיקה
+  void _showDeleteConfirmation(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Confirm Deletion"),
+        content: const Text(
+          "Are you sure you want to delete all sensors? This action cannot be undone.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              Navigator.pop(ctx); // סגירת הדיאלוג
+
+              try {
+                // הפעלת פונקציית המחיקה מה-State
+                await context.read<DashboardState>().deleteAllSensors();
+
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("All sensors deleted successfully"),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Failed to delete: $e"),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text(
+              "Delete Everything",
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteSingleSensorDialog(BuildContext context) {
+    final controller = TextEditingController();
+    var selectedType = 'sensorId';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Delete Sensor"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<String>(
+              value: selectedType,
+              items: const [
+                DropdownMenuItem(value: 'sensorId', child: Text('Sensor ID')),
+                DropdownMenuItem(value: 'name', child: Text('Sensor Name')),
+              ],
+              onChanged: (value) {
+                if (value != null) selectedType = value;
+              },
+              decoration: const InputDecoration(labelText: 'Delete by'),
+            ),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(labelText: 'ID or Name'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              final value = controller.text.trim();
+              if (value.isEmpty) return;
+
+              Navigator.pop(ctx);
+
+              try {
+                if (selectedType == 'sensorId') {
+                  await context.read<DashboardState>().deleteSensorById(value);
+                } else {
+                  await context.read<DashboardState>().deleteSensorByName(
+                    value,
+                  );
+                }
+
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Deleted sensor with $selectedType "$value"',
+                      ),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to delete sensor: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('Delete'),
+          ),
+        ],
       ),
     );
   }
