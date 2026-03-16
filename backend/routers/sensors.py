@@ -1,5 +1,4 @@
-from typing import Optional
-
+from typing import Optional, Dict
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from database.db import SessionLocal
@@ -7,20 +6,26 @@ from models.sensor import Sensor
 from datetime import datetime
 from pydantic import BaseModel
 
+# מילון גלובלי (זמני) לשמירת בקשות דגימה ידנית
+manual_requests: Dict[str, bool] = {}
+
+# --- Schemas (Pydantic) ---
+
 class SensorCreate(BaseModel):
     sensor_id: str
     name: str
-    plantType: str
-    locationType: str = "indoor"
+    plant_type: str      # שונה ל-snake_case
+    location_type: str = "indoor"
     moisture: float
 
 class SensorRename(BaseModel):
     name: str
 
-
 class SensorUpdate(BaseModel):
-    sensorId: str
+    sensor_id: str
     moisture: float
+
+# --- Router Setup ---
 
 router = APIRouter(prefix="/sensors", tags=["sensors"])
 
@@ -31,12 +36,7 @@ def get_db():
     finally:
         db.close()
 
-
-@router.get("/debug")
-def debug(db: Session = Depends(get_db)):
-    sensors = db.query(Sensor).all()
-    return sensors
-
+# --- Routes ---
 
 @router.get("")
 def get_sensors(db: Session = Depends(get_db)):
@@ -56,11 +56,16 @@ def get_sensors(db: Session = Depends(get_db)):
 @router.post("/create")
 def create_sensor(data: SensorCreate, db: Session = Depends(get_db)):
     try:
+        # בדיקה אם החיישן כבר קיים
+        existing = db.query(Sensor).filter(Sensor.sensor_id == data.sensor_id).first()
+        if existing:
+            return {"status": "already_exists"}
+
         sensor = Sensor( 
-            sensor_id=data.sensorId,
+            sensor_id=data.sensor_id,
             name=data.name,
-            plant_type=data.plantType,
-            location_type=data.locationType,
+            plant_type=data.plant_type,
+            location_type=data.location_type,
             moisture=data.moisture, 
             last_update=datetime.utcnow(), 
         ) 
@@ -69,37 +74,52 @@ def create_sensor(data: SensorCreate, db: Session = Depends(get_db)):
         return {"status": "ok"}
     except Exception as e:
         db.rollback()
-        print(f"Database Error: {e}")
-        return {"error": str(e)}, 500
+        print(f"❌ Database Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/update")
+def update_sensor_data(data: SensorUpdate, db: Session = Depends(get_db)):
+    # תיקון: שימוש ב-sensor_id במקום sensorId
+    sensor = db.query(Sensor).filter(Sensor.sensor_id == data.sensor_id).first()
+    
+    if not sensor:
+        raise HTTPException(status_code=404, detail=f"Sensor {data.sensor_id} not found")
+    
+    sensor.moisture = data.moisture
+    sensor.last_update = datetime.utcnow()
+    
+    # ברגע שהגיע עדכון, אנחנו מבטלים את דגל הבקשה הידנית אם היה כזה
+    manual_requests[data.sensor_id] = False
+    
+    db.commit()
+    print(f"✅ Updated: Sensor {data.sensor_id} -> {data.moisture}%")
+    return {"status": "updated", "new_moisture": sensor.moisture}
+
+# --- Manual Sampling Endpoints (עבור האפליקציה וה-ESP32) ---
+
+@router.post("/{sensor_id}/request-manual")
+def request_manual_sample(sensor_id: str):
+    """האפליקציה קוראת לזה כשלוחצים על Refresh"""
+    manual_requests[sensor_id] = True
+    return {"status": "request_sent", "sensor_id": sensor_id}
+
+@router.get("/{sensor_id}/check-manual-request")
+def check_manual_request(sensor_id: str):
+    """ה-ESP32 קורא לזה כל כמה שניות ב-Loop"""
+    is_required = manual_requests.get(sensor_id, False)
+    return {"manual_sampling_required": is_required}
+
+# --- Management Routes ---
 
 @router.post("/{sensor_id}/rename")
 def rename_sensor(sensor_id: str, data: SensorRename, db: Session = Depends(get_db)):
     sensor = db.query(Sensor).filter(Sensor.sensor_id == sensor_id).first()
     if not sensor:
-        return {"error": "Sensor not found"}
+        raise HTTPException(status_code=404, detail="Sensor not found")
     
     sensor.name = data.name
     db.commit()
     return {"status": "ok"}
-
-
-
-@router.post("/update")
-def update_sensor_data(data: SensorUpdate, db: Session = Depends(get_db)):
-
-    sensor = db.query(Sensor).filter(Sensor.sensor_id == data.sensorId).first()
-    
-    if not sensor:
-        return {"error": "Sensor not found in database"}, 404
-    
-    sensor.moisture = data.moisture
-    sensor.last_update = datetime.utcnow()
-    
-    db.commit()
-
-    print(f"✅ Success: Sensor {data.sensorId} updated to {data.moisture}%")
-    return {"status": "updated", "new_moisture": sensor.moisture}
-
 
 @router.delete("/delete-all")
 def delete_all_sensors(db: Session = Depends(get_db)):
@@ -111,25 +131,19 @@ def delete_all_sensors(db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.delete("/delete")
 def delete_sensor(
-    sensorId: Optional[str] = Query(None),
+    sensor_id: Optional[str] = Query(None, alias="sensorId"),
     name: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Delete a sensor by its ID or by its name.
-
-    If both `sensorId` and `name` are provided, both will be used to filter (AND).
-    """
-
-    if sensorId is None and name is None:
+    if sensor_id is None and name is None:
         raise HTTPException(status_code=400, detail="Provide sensorId or name to delete")
 
     query = db.query(Sensor)
-    if sensorId is not None:
-        query = query.filter(Sensor.sensor_id == sensorId)
-    if name is not None:
+    if sensor_id:
+        query = query.filter(Sensor.sensor_id == sensor_id)
+    if name:
         query = query.filter(Sensor.name == name)
 
     deleted = query.delete(synchronize_session=False)
@@ -138,4 +152,3 @@ def delete_sensor(
 
     db.commit()
     return {"deleted": deleted}
-

@@ -11,6 +11,11 @@ class SensorRepository {
     return data.map<Sensor>((json) => Sensor.fromJson(json)).toList();
   }
 
+  // פונקציה חדשה שנוספה ל-Repository
+  Future<void> requestManualSample(String sensorId) async {
+    await api.requestManualSample(sensorId);
+  }
+
   Future<void> renameSensor(String sensorId, String newName) async {
     await api.renameSensor(sensorId, newName);
   }
