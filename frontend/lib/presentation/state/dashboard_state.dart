@@ -69,7 +69,7 @@ class DashboardState extends ChangeNotifier {
     required String name,
     required String plantType,
     required String locationType,
-    required int moisture,
+    required double moisture,
   }) async {
     await repo.createSensor(
       sensorId: sensorId,

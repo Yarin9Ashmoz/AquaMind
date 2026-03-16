@@ -41,6 +41,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
             fontWeight: FontWeight.w600,
           ),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Sample now',
+            icon: const Icon(Icons.refresh, color: Colors.black),
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              messenger.showSnackBar(
+                const SnackBar(content: Text('Sampling...')),
+              );
+              await state.loadSensors();
+              if (context.mounted) {
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('Sample complete')),
+                );
+              }
+            },
+          ),
+        ],
       ),
 
       body: state.isLoading
@@ -159,7 +177,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  String _getStatus(int moisture) {
+  String _getStatus(double moisture) {
     if (moisture < 20) return "Dry";
     if (moisture < 40) return "Low";
     if (moisture < 70) return "Good";

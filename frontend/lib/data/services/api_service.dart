@@ -167,7 +167,7 @@ class ApiService {
     required String name,
     required String plantType,
     required String locationType,
-    required int moisture,
+    required double moisture,
   }) async {
     try {
       final url = Uri.parse("$baseUrl/sensors/create");

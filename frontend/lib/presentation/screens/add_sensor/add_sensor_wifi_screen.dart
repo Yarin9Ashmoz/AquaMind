@@ -28,7 +28,8 @@ class AddSensorWifiScreen extends StatefulWidget {
 }
 
 class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
-  String? ssid; // Changed to nullable to prevent Dropdown Assertion Error
+
+  String? ssid;
   String password = "";
   bool isLoading = false;
   List<WifiNetwork> networks = [];
@@ -36,10 +37,9 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
   @override
   void initState() {
     super.initState();
-    scanWifi(); // Start scanning for local networks immediately
+    scanWifi();
   }
 
-  /// Scans for nearby WiFi networks using the wifi_iot plugin
   Future<void> scanWifi() async {
     try {
       List<WifiNetwork> result = await WiFiForIoTPlugin.loadWifiList();
@@ -57,21 +57,22 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
     }
   }
 
-  /// Filters out duplicate SSIDs and null values to prevent Dropdown crashes
   List<DropdownMenuItem<String>> _getUniqueWifiItems() {
-    final seenSsid = <String>{};
+    final seen = <String>{};
+
     return networks
-        .where((net) => net.ssid != null && net.ssid!.isNotEmpty)
-        .where((net) => seenSsid.add(net.ssid!)) // Only allow unique SSIDs
-        .map((net) => DropdownMenuItem(
-              value: net.ssid,
-              child: Text(net.ssid!),
+        .where((n) => n.ssid != null && n.ssid!.isNotEmpty)
+        .where((n) => seen.add(n.ssid!))
+        .map((n) => DropdownMenuItem(
+              value: n.ssid,
+              child: Text(n.ssid!),
             ))
         .toList();
   }
 
   @override
   Widget build(BuildContext context) {
+
     return Scaffold(
       appBar: AppBar(title: const Text("WiFi Setup")),
       body: Padding(
@@ -79,20 +80,22 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+
             const Text(
               "Connect your sensor to WiFi",
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
+
             const SizedBox(height: 16),
 
-            // WiFi SSID Dropdown with duplicate protection
             DropdownButtonFormField<String>(
               decoration: const InputDecoration(
                 labelText: "Choose WiFi",
                 prefixIcon: Icon(Icons.wifi),
               ),
-              // Safety check: only set value if it exists in the current network list
-              value: (ssid != null && networks.any((net) => net.ssid == ssid)) ? ssid : null,
+              value: (ssid != null && networks.any((n) => n.ssid == ssid))
+                  ? ssid
+                  : null,
               items: _getUniqueWifiItems(),
               onChanged: (value) {
                 setState(() {
@@ -129,11 +132,11 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
     );
   }
 
-  /// Orchestrates BLE data transmission and Backend registration
   Future<void> _handleFinish() async {
+
     if (ssid == null || ssid!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please select a WiFi network")),
+        const SnackBar(content: Text("Please select WiFi")),
       );
       return;
     }
@@ -141,7 +144,7 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
     setState(() => isLoading = true);
 
     try {
-      // 1. Prepare JSON payload for the ESP32
+
       final payload = {
         "name": widget.sensorName,
         "plantType": widget.plantType,
@@ -152,52 +155,98 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
 
       final jsonString = jsonEncode(payload);
 
-      // 2. Ensure Bluetooth connection is active
-      if (widget.device.connectionState != BluetoothConnectionState.connected) {
-        await widget.device.connect();
+      print("Connecting BLE...");
+
+      await widget.device.connect(
+        timeout: const Duration(seconds: 15),
+        autoConnect: false,
+      );
+
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      print("Requesting MTU...");
+
+      await widget.device.requestMtu(256);
+
+      print("Discovering services...");
+
+      List<BluetoothService> services =
+          await widget.device.discoverServices();
+
+      BluetoothService? service;
+
+      for (var s in services) {
+        if (s.uuid.toString().toUpperCase() ==
+            "6E400001-B5A3-F393-E0A9-E50E24DCCA9E") {
+          service = s;
+        }
       }
 
-      // 3. Find the specific BLE Service and Characteristic (matching ESP32 UUIDs)
-      List<BluetoothService> services = await widget.device.discoverServices();
-      
-      final service = services.firstWhere(
-        (s) => s.uuid.toString().toUpperCase() == "6E400001-B5A3-F393-E0A9-E50E24DCCA9E",
-      );
+      if (service == null) {
+        throw Exception("BLE Service not found");
+      }
 
-      final characteristic = service.characteristics.firstWhere(
-        (c) => c.uuid.toString().toUpperCase() == "6E400002-B5A3-F393-E0A9-E50E24DCCA9E",
-      );
+      BluetoothCharacteristic? characteristic;
 
-      // 4. Send the WiFi credentials to the ESP32 over BLE
+      for (var c in service.characteristics) {
+        if (c.uuid.toString().toUpperCase() ==
+            "6E400002-B5A3-F393-E0A9-E50E24DCCA9E") {
+          characteristic = c;
+        }
+      }
+
+      if (characteristic == null) {
+        throw Exception("BLE Characteristic not found");
+      }
+
+      print("Sending WiFi credentials...");
+
       await characteristic.write(
         Uint8List.fromList(utf8.encode(jsonString)),
         withoutResponse: false,
       );
 
-      // 5. Register the sensor in the Cloud Backend (Render)
-      // Note: We use the MAC address (device.id) as the sensorId
+      await Future.delayed(const Duration(seconds: 2));
+
+      print("Registering sensor in backend...");
+
       await context.read<DashboardState>().createSensor(
         sensorId: widget.device.id.toString(),
         name: widget.sensorName,
         plantType: widget.plantType,
         locationType: widget.locationType,
-        moisture: 0,
+        moisture: 0.0,
       );
+
+      await widget.device.disconnect();
 
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const AddSensorSuccessScreen()),
+          MaterialPageRoute(
+            builder: (_) => const AddSensorSuccessScreen(),
+          ),
         );
       }
+
     } catch (e) {
+
+      print("BLE ERROR: $e");
+
+      try {
+        await widget.device.disconnect();
+      } catch (_) {}
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: ${e.toString()}")),
+          SnackBar(content: Text("Connection error: $e")),
         );
       }
+
     } finally {
-      if (mounted) setState(() => isLoading = false);
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
     }
   }
 }

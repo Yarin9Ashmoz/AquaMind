@@ -28,7 +28,7 @@ class SensorRepository {
     required String name,
     required String plantType,
     required String locationType,
-    required int moisture,
+    required double moisture,
   }) async {
     await api.createSensor(
       sensorId: sensorId,

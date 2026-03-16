@@ -1,7 +1,7 @@
 class Sensor {
   final String sensorId;
   String name;
-  final int moisture;
+  final double moisture;
   final String plantType; // pot / garden
   final String locationType; // indoor / outdoor
   final DateTime lastUpdate;
@@ -26,7 +26,7 @@ class Sensor {
     return Sensor(
       sensorId: sensorId,
       name: json["name"] ?? "",
-      moisture: (json["moisture"] as num?)?.toInt() ?? 0,
+      moisture: (json["moisture"] as num?)?.toDouble() ?? 0,
       plantType: plantType,
       locationType: locationType,
       lastUpdate: DateTime.tryParse(lastUpdateRaw) ?? DateTime.now(),

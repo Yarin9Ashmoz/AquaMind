@@ -8,7 +8,7 @@ from datetime import datetime
 from pydantic import BaseModel
 
 class SensorCreate(BaseModel):
-    sensorId: str
+    sensor_id: str
     name: str
     plantType: str
     locationType: str = "indoor"

@@ -62,7 +62,7 @@ class SensorDetailsScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "Moisture: ${sensor.moisture}%",
+              "Moisture: ${sensor.moisture.toStringAsFixed(1)}%",
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 8),
