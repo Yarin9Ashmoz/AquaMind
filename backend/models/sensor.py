@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Float, DateTime
 from datetime import datetime
-from database.db import Base
+from backend.database.db import Base
 
 class Sensor(Base):
     __tablename__ = "sensors"
