@@ -11,4 +11,5 @@ class Sensor(Base):
     location_type = Column(String, default="indoor")
     moisture = Column(Float)
     last_update = Column(DateTime, default=datetime.utcnow)
+    dry_tolerance_days = Column(Integer, default=3)
 

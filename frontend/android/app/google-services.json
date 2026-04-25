@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1022003931501",
+    "project_id": "aquamind-8e6f8",
+    "storage_bucket": "aquamind-8e6f8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1022003931501:android:d057445d6f3118077a9264",
+        "android_client_info": {
+          "package_name": "com.aquamind.pro"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDFOTyGanG96vpy7MYPsPwn3Ccwf_Oqpvo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

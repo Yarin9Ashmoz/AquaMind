@@ -11,10 +11,9 @@ class DashboardState extends ChangeNotifier {
   String? error;
 
   DashboardState(this.repo) {
-    loadSensors(); // טעינה ראשונית של החיישנים
+    loadSensors(); 
   }
 
-  // פונקציה לטעינת חיישנים מהשרת
   Future<void> loadSensors() async {
     try {
       isLoading = true;
@@ -23,14 +22,12 @@ class DashboardState extends ChangeNotifier {
 
       sensors = await repo.getSensors();
 
-      // עדכון החיישן הנבחר בנתונים החדשים
       if (selectedSensor != null) {
         try {
           selectedSensor = sensors.firstWhere(
             (s) => s.sensorId == selectedSensor!.sensorId,
           );
         } catch (_) {
-          // אם החיישן כבר לא קיים ברשימה החדשה
           selectedSensor = sensors.isNotEmpty ? sensors.first : null;
         }
       } else if (sensors.isNotEmpty) {
@@ -47,19 +44,15 @@ class DashboardState extends ChangeNotifier {
     }
   }
 
-  // Alias למקרה שקראת לפונקציה בשם fetchSensors במסכים אחרים
   Future<void> fetchSensors() => loadSensors();
 
-  // --- הפונקציה שהייתה חסרה ---
   Future<void> deleteAllSensors() async {
     try {
       isLoading = true;
       notifyListeners();
 
-      // מחיקה בשרת דרך ה-Repository
       await repo.deleteAllSensors();
 
-      // ניקוי מקומי של הרשימה
       sensors = [];
       selectedSensor = null;
 
@@ -74,7 +67,6 @@ class DashboardState extends ChangeNotifier {
     }
   }
 
-  // מחיקת חיישן בודד
   Future<void> deleteSensorById(String sensorId) async {
     try {
       await repo.deleteSensor(sensorId: sensorId);
@@ -89,7 +81,6 @@ class DashboardState extends ChangeNotifier {
     }
   }
 
-  // מחיקת חיישן לפי שם
   Future<void> deleteSensorByName(String name) async {
     try {
       await repo.deleteSensor(name: name);
@@ -104,7 +95,6 @@ class DashboardState extends ChangeNotifier {
     }
   }
 
-  // שינוי שם
   Future<void> renameSensor(String sensorId, String newName) async {
     try {
       await repo.renameSensor(sensorId, newName);
@@ -115,13 +105,13 @@ class DashboardState extends ChangeNotifier {
     }
   }
 
-  // יצירת חיישן
   Future<void> createSensor({
     required String sensorId,
     required String name,
     required String plantType,
     required String locationType,
     required double moisture,
+    required int dryToleranceDays,
   }) async {
     try {
       await repo.createSensor(
@@ -130,6 +120,8 @@ class DashboardState extends ChangeNotifier {
         plantType: plantType,
         locationType: locationType,
         moisture: moisture,
+        dryToleranceDays: dryToleranceDays,
+        
       );
       await loadSensors();
     } catch (e) {
@@ -138,13 +130,11 @@ class DashboardState extends ChangeNotifier {
     }
   }
 
-  // בחירת חיישן ידנית (למשל בלחיצה על רשימה)
   void selectSensor(Sensor sensor) {
     selectedSensor = sensor;
     notifyListeners();
   }
 
-  // --- Getters לעיצוב ---
   String get statusText {
     if (selectedSensor == null) return "No data";
     final m = selectedSensor!.moisture;

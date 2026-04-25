@@ -5,7 +5,6 @@ class ApiService {
   final String baseUrl = "https://aquamind-0xli.onrender.com";
   final Duration timeout = const Duration(seconds: 30);
 
-  // 1. בקשת דגימה ידנית
   Future<void> requestManualSample(String sensorId) async {
     try {
       final url = Uri.parse("$baseUrl/sensors/$sensorId/request-manual");
@@ -20,7 +19,6 @@ class ApiService {
     }
   }
 
-  // 2. קבלת כל החיישנים
   Future<List<dynamic>> getSensors() async {
     try {
       final url = Uri.parse("$baseUrl/sensors");
@@ -36,13 +34,13 @@ class ApiService {
     }
   }
 
-  // 3. יצירת חיישן חדש
   Future<void> createSensor({
     required String sensorId,
     required String name,
     required String plantType,
     required String locationType,
     required double moisture,
+    required int dryToleranceDays,
   }) async {
     try {
       final url = Uri.parse("$baseUrl/sensors/create");
@@ -56,6 +54,7 @@ class ApiService {
               "plant_type": plantType,
               "location_type": locationType,
               "moisture": moisture,
+              "dry_tolerance_days": dryToleranceDays, 
             }),
           )
           .timeout(timeout);
@@ -69,7 +68,6 @@ class ApiService {
     }
   }
 
-  // 4. שינוי שם חיישן
   Future<void> renameSensor(String sensorId, String newName) async {
     try {
       final url = Uri.parse("$baseUrl/sensors/$sensorId/rename");
@@ -88,7 +86,6 @@ class ApiService {
     }
   }
 
-  // 5. מחיקת חיישן בודד
   Future<void> deleteSensor({String? sensorId, String? name}) async {
     try {
       if (sensorId == null && name == null) {
@@ -113,12 +110,11 @@ class ApiService {
     }
   }
 
-  // 6. מחיקת כל החיישנים (תיקון URL לפורמט אחיד)
   Future<void> deleteAllSensors() async {
     try {
       final url = Uri.parse(
         '$baseUrl/sensors/delete-all',
-      ); // וודא שזה תואם ל-Backend (או delete_all)
+      ); 
       final res = await http.delete(url).timeout(timeout);
 
       if (res.statusCode != 200) {

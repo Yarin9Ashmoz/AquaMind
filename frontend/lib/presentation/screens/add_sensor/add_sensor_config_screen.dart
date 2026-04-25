@@ -15,9 +15,10 @@ class AddSensorConfigScreen extends StatefulWidget {
 class _AddSensorConfigScreenState extends State<AddSensorConfigScreen> {
   final TextEditingController _controller = TextEditingController();
   
-  // הגדרת ערכי ברירת מחדל
+  // הגדרת ערכי ברירת מחדל כולל השדה החדש
   String plantType = "pot";
   String locationType = "indoor";
+  int dryToleranceDays = 3; // השדה החדש של ימי היובש
 
   @override
   void dispose() {
@@ -71,6 +72,25 @@ class _AddSensorConfigScreenState extends State<AddSensorConfigScreen> {
               ],
               onChanged: (v) => setState(() => locationType = v!),
             ),
+
+            const SizedBox(height: 16),
+
+            // ה-Dropdown החדש שהוספנו
+            DropdownButtonFormField<int>(
+              value: dryToleranceDays,
+              decoration: const InputDecoration(
+                labelText: "Dry Tolerance (Days)", 
+                helperText: "For how many days can the plant stay dry?",
+                border: OutlineInputBorder()
+              ),
+              items: List.generate(15, (index) => index).map((int value) {
+                return DropdownMenuItem<int>(
+                  value: value,
+                  child: Text(value == 0 ? "No delay (0 days)" : "$value Days"),
+                );
+              }).toList(),
+              onChanged: (v) => setState(() => dryToleranceDays = v!),
+            ),
             
             const Spacer(),
             
@@ -92,10 +112,10 @@ class _AddSensorConfigScreenState extends State<AddSensorConfigScreen> {
                     MaterialPageRoute(
                       builder: (_) => AddSensorWifiScreen(
                         device: widget.device,
-                        // כאן מחקנו את השורה של ה-deviceName כי היא לא קיימת ב-WifiScreen
                         sensorName: _controller.text,
                         plantType: plantType,
                         locationType: locationType,
+                        dryToleranceDays: dryToleranceDays, // העברה למסך הבא
                       ),
                     ),
                   );

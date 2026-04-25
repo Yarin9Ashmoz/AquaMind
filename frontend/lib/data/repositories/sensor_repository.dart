@@ -8,6 +8,7 @@ class SensorRepository {
 
   Future<List<Sensor>> getSensors() async {
     final data = await api.getSensors();
+    // Converts raw JSON list into a list of Sensor objects
     return data.map<Sensor>((json) => Sensor.fromJson(json)).toList();
   }
 
@@ -19,7 +20,6 @@ class SensorRepository {
     await api.renameSensor(sensorId, newName);
   }
 
-  // תוקן: עכשיו קורא ל-API במקום לנסות להשתמש ב-http ישירות
   Future<void> deleteAllSensors() async {
     await api.deleteAllSensors();
   }
@@ -34,13 +34,16 @@ class SensorRepository {
     required String plantType,
     required String locationType,
     required double moisture,
+    required int dryToleranceDays, // Added to match ApiService
   }) async {
+    // Forwarding the call to the API layer
     await api.createSensor(
       sensorId: sensorId,
       name: name,
       plantType: plantType,
       locationType: locationType,
       moisture: moisture,
+      dryToleranceDays: dryToleranceDays, // Pass it through
     );
   }
 }
