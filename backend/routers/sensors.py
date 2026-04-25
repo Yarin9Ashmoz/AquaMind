@@ -5,7 +5,7 @@ from database.db import SessionLocal
 from models.sensor import Sensor
 from datetime import datetime
 
-from backend.schemas.sensors import (
+from schemas.sensors import (
     SensorCreate,
     SensorUpdate,
     SensorRename,
