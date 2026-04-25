@@ -5,7 +5,13 @@ from database.db import SessionLocal
 from models.sensor import Sensor
 from datetime import datetime
 
-from ..schemas.sensors import SensorCreate, SensorUpdate, SensorRename, SensorResponse
+from backend.schemas.sensors import (
+    SensorCreate,
+    SensorUpdate,
+    SensorRename,
+    SensorResponse,
+)
+
 
 manual_requests: Dict[str, bool] = {}
 
