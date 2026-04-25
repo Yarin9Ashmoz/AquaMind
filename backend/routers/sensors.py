@@ -1,11 +1,11 @@
 from typing import List, Optional, Dict
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from backend.database.db import SessionLocal
-from backend.models.sensor import Sensor
+from database.db import SessionLocal
+from models.sensor import Sensor
 from datetime import datetime
 
-from backend.schemas.sensors import (
+from schemas.sensors import (
     SensorCreate,
     SensorUpdate,
     SensorRename,

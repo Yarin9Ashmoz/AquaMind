@@ -1,9 +1,9 @@
 from fastapi import FastAPI
-from backend.database.db import Base, engine
+from database.db import Base, engine
 # 1. IMPORTANT: Import all models here so SQLAlchemy detects them
 # This ensures that Base.metadata.create_all actually finds your tables
-from backend.models.sensor import Sensor 
-from backend.routers import sensors
+from models.sensor import Sensor 
+from routers import sensors
 
 # 2. Create tables in the database (if they don't exist)
 # This command runs every time the server starts
