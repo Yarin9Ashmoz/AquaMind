@@ -1,17 +1,15 @@
 plugins {
     id("com.android.application")
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
-    // Google Services plugin for Firebase
-    id("com.google.gms.google-services") 
+    id("com.google.gms.google-services")
 }
 
 android {
-    // This must match your Firebase project package name
-    namespace = "com.aquamind.pro" 
-    compileSdk = flutter.compileSdk
-    ndkVersion = flutter.ndkVersion
+    namespace = "com.aquamind.pro"
+
+    compileSdk = 34
+    ndkVersion = "26.1.10909125" // אם זה עושה בעיות – אפשר למחוק
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -19,22 +17,21 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+        jvmTarget = "17"
     }
 
     defaultConfig {
-        // Your unique Application ID
-        applicationId = "com.aquamind.pro" 
-        
+        applicationId = "com.aquamind.pro"
+
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
+        targetSdk = 34
+
+        versionCode = 1
+        versionName = "1.0.0"
     }
 
     buildTypes {
         release {
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
