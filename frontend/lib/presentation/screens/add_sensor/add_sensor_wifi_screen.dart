@@ -109,16 +109,16 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
       await Future.delayed(const Duration(seconds: 2));
 
       // 4. Create the sensor record in the Cloud/Backend via Provider
-      if (mounted) {
-        await context.read<DashboardState>().createSensor(
-          sensorId: widget.device.remoteId.toString(),
-          name: widget.sensorName,
-          plantType: widget.plantType,
-          locationType: widget.locationType,
-          moisture: 0.0, // Initial moisture value
-          dryToleranceDays: widget.dryToleranceDays, // Critical: Pass to API
-        );
-      }
+      // if (mounted) {
+      //   await context.read<DashboardState>().createSensor(
+      //     sensorId: widget.device.remoteId.toString(),
+      //     name: widget.sensorName,
+      //     plantType: widget.plantType,
+      //     locationType: widget.locationType,
+      //     moisture: 0.0, // Initial moisture value
+      //     dryToleranceDays: widget.dryToleranceDays, // Critical: Pass to API
+      //   );
+      // }
 
       await widget.device.disconnect();
 

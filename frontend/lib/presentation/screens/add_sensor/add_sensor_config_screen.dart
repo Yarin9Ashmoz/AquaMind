@@ -15,14 +15,13 @@ class AddSensorConfigScreen extends StatefulWidget {
 class _AddSensorConfigScreenState extends State<AddSensorConfigScreen> {
   final TextEditingController _controller = TextEditingController();
   
-  // הגדרת ערכי ברירת מחדל כולל השדה החדש
   String plantType = "pot";
   String locationType = "indoor";
-  int dryToleranceDays = 3; // השדה החדש של ימי היובש
+  int dryToleranceDays = 3; 
 
   @override
   void dispose() {
-    _controller.dispose(); // חשוב לניקוי זיכרון
+    _controller.dispose(); 
     super.dispose();
   }
 
@@ -75,7 +74,6 @@ class _AddSensorConfigScreenState extends State<AddSensorConfigScreen> {
 
             const SizedBox(height: 16),
 
-            // ה-Dropdown החדש שהוספנו
             DropdownButtonFormField<int>(
               value: dryToleranceDays,
               decoration: const InputDecoration(
@@ -99,7 +97,6 @@ class _AddSensorConfigScreenState extends State<AddSensorConfigScreen> {
               height: 50,
               child: ElevatedButton(
                 onPressed: () {
-                  // בדיקה שהשם לא ריק
                   if (_controller.text.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text("Please enter a sensor name")),
@@ -115,7 +112,7 @@ class _AddSensorConfigScreenState extends State<AddSensorConfigScreen> {
                         sensorName: _controller.text,
                         plantType: plantType,
                         locationType: locationType,
-                        dryToleranceDays: dryToleranceDays, // העברה למסך הבא
+                        dryToleranceDays: dryToleranceDays, 
                       ),
                     ),
                   );

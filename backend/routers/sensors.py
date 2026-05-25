@@ -24,14 +24,14 @@ def get_db():
         db.close()
 
 # ---------------------------
-# 📡 GET ALL
+# GET ALL
 # ---------------------------
 @router.get("", response_model=List[SensorResponse])
 def get_sensors(db: Session = Depends(get_db)):
     return db.query(Sensor).all()
 
 # ---------------------------
-# ➕ CREATE
+# CREATE
 # ---------------------------
 @router.post("/create")
 def create_sensor(data: SensorCreate, db: Session = Depends(get_db)):
@@ -55,11 +55,11 @@ def create_sensor(data: SensorCreate, db: Session = Depends(get_db)):
 
     except Exception as e:
         db.rollback()
-        print(f"❌ Error creating sensor: {e}")
+        print(f"Error creating sensor: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # ---------------------------
-# 📤 UPDATE MOISTURE
+# UPDATE MOISTURE
 # ---------------------------
 @router.post("/update")
 def update_sensor_data(data: SensorUpdate, db: Session = Depends(get_db)):
@@ -67,7 +67,7 @@ def update_sensor_data(data: SensorUpdate, db: Session = Depends(get_db)):
     sensor = db.query(Sensor).filter(Sensor.sensor_id == data.sensor_id).first()
 
     if not sensor:
-        print(f"❌ Sensor {data.sensor_id} not found for update")
+        print(f"Sensor {data.sensor_id} not found for update")
         raise HTTPException(status_code=404, detail="Sensor not found")
 
     old_moisture = sensor.moisture
@@ -78,47 +78,43 @@ def update_sensor_data(data: SensorUpdate, db: Session = Depends(get_db)):
 
     db.commit()
     
-    print(f"✅ Sensor {data.sensor_id} updated: {old_moisture}% → {data.moisture}%")
+    print(f"Sensor {data.sensor_id} updated: {old_moisture}% → {data.moisture}%")
 
     return {"status": "updated", "sensor_id": data.sensor_id, "moisture": data.moisture}
 
 # ---------------------------
-# 📲 REQUEST MEASURE (FIXED)
+# REQUEST MEASURE (FIXED)
 # ---------------------------
 @router.post("/{sensor_id}/request-manual")
 def request_manual(sensor_id: str):
-    # המרה חזורה של underscores לקולונים (אם הם הגיעו כunderscores)
     sensor_id_with_colons = sensor_id.replace("_", ":")
     
     manual_requests[sensor_id_with_colons] = True
 
-    print(f"📡 Manual request for {sensor_id_with_colons}")
+    print(f"Manual request for {sensor_id_with_colons}")
 
     return {"status": "ok"}
 
 # ---------------------------
-# 🤖 ESP POLLING (FIXED + SAFE)
+# ESP POLLING (FIXED + SAFE)
 # ---------------------------
 @router.get("/command/{sensor_id}")
 def get_command(sensor_id: str):
-    # המרה חזורה של underscores לקולונים (אם הם הגיעו כunderscores)
     sensor_id_with_colons = sensor_id.replace("_", ":")
     
     value = manual_requests.get(sensor_id_with_colons, False)
 
-    # רק הדפס אם יש פקודה
     if value:
-        print(f"📡 Sending measurement command to {sensor_id_with_colons}")
+        print(f"Sending measurement command to {sensor_id_with_colons}")
         manual_requests[sensor_id_with_colons] = False
     
     return {"measure": value}
 
 # ---------------------------
-# ✏️ RENAME
+# RENAME
 # ---------------------------
 @router.post("/{sensor_id}/rename")
 def rename_sensor(sensor_id: str, data: SensorRename, db: Session = Depends(get_db)):
-    # המרה חזורה של underscores לקולונים
     sensor_id_with_colons = sensor_id.replace("_", ":")
 
     sensor = db.query(Sensor).filter(Sensor.sensor_id == sensor_id_with_colons).first()
@@ -132,7 +128,7 @@ def rename_sensor(sensor_id: str, data: SensorRename, db: Session = Depends(get_
     return {"status": "ok"}
 
 # ---------------------------
-# ❌ DELETE
+# DELETE
 # ---------------------------
 @router.delete("/delete")
 def delete_sensor(
@@ -140,7 +136,6 @@ def delete_sensor(
     name: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    # המרה חזורה של underscores לקולונים אם צריך
     if sensor_id:
         sensor_id = sensor_id.replace("_", ":")
 
@@ -161,7 +156,7 @@ def delete_sensor(
     return {"deleted": deleted}
 
 # ---------------------------
-# 🧹 DELETE ALL
+# DELETE ALL
 # ---------------------------
 @router.delete("/delete-all")
 def delete_all(db: Session = Depends(get_db)):

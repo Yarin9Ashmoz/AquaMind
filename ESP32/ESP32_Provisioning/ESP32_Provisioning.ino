@@ -385,8 +385,8 @@ void loop()
       sendMeasurement();
     }
 
-    // 🔥 בדוק פקודות מהשרת כל 10 שניות
-    if (millis() - lastCommandCheck > 10000)
+    // 🔥 בדוק פקודות מהשרת כל 5 שניות
+    if (millis() - lastCommandCheck > 5000)
     {
       lastCommandCheck = millis();
       Serial.println("\n🔍 Checking for remote commands...");
