@@ -8,8 +8,8 @@ plugins {
 android {
     namespace = "com.aquamind.pro"
 
-    compileSdk = 34
-    ndkVersion = "26.1.10909125" // אם זה עושה בעיות – אפשר למחוק
+    compileSdk = 36
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -24,7 +24,7 @@ android {
         applicationId = "com.aquamind.pro"
 
         minSdk = flutter.minSdkVersion
-        targetSdk = 34
+        targetSdk = 36
 
         versionCode = 1
         versionName = "1.0.0"
