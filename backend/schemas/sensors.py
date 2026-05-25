@@ -10,7 +10,7 @@ class SensorBase(BaseModel):
 
 class SensorCreate(SensorBase):
     sensor_id: str
-    moisture: float
+    moisture: float = 0.0  # Default value for initial sensor creation
 
 class SensorUpdate(BaseModel):
     sensor_id: str

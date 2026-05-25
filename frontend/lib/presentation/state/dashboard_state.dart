@@ -11,7 +11,7 @@ class DashboardState extends ChangeNotifier {
   String? error;
 
   DashboardState(this.repo) {
-    loadSensors(); 
+    loadSensors();
   }
 
   Future<void> loadSensors() async {
@@ -44,6 +44,18 @@ class DashboardState extends ChangeNotifier {
     }
   }
 
+  Future<void> requestMeasurement(String sensorId) async {
+    try {
+      // ✅ השתמש ב-ApiService עם timeout וerror handling
+      await repo.requestManualSample(sensorId);
+      print("📡 Measurement request sent successfully");
+    } catch (e) {
+      error = "Measurement request failed: $e";
+      print("❌ Error requesting measurement: $e");
+      rethrow;
+    }
+  }
+
   Future<void> fetchSensors() => loadSensors();
 
   Future<void> deleteAllSensors() async {
@@ -63,7 +75,6 @@ class DashboardState extends ChangeNotifier {
       isLoading = false;
       error = "Failed to delete all sensors: $e";
       notifyListeners();
-      print("❌ Error deleting all sensors: $e");
     }
   }
 
@@ -71,9 +82,11 @@ class DashboardState extends ChangeNotifier {
     try {
       await repo.deleteSensor(sensorId: sensorId);
       sensors.removeWhere((s) => s.sensorId == sensorId);
+
       if (selectedSensor?.sensorId == sensorId) {
         selectedSensor = sensors.isNotEmpty ? sensors.first : null;
       }
+
       notifyListeners();
     } catch (e) {
       error = "Delete failed: $e";
@@ -85,9 +98,11 @@ class DashboardState extends ChangeNotifier {
     try {
       await repo.deleteSensor(name: name);
       sensors.removeWhere((s) => s.name == name);
+
       if (selectedSensor?.name == name) {
         selectedSensor = sensors.isNotEmpty ? sensors.first : null;
       }
+
       notifyListeners();
     } catch (e) {
       error = "Delete failed: $e";
@@ -98,7 +113,7 @@ class DashboardState extends ChangeNotifier {
   Future<void> renameSensor(String sensorId, String newName) async {
     try {
       await repo.renameSensor(sensorId, newName);
-      await loadSensors(); // רענון נתונים
+      await loadSensors();
     } catch (e) {
       error = "Rename failed: $e";
       notifyListeners();
@@ -121,8 +136,8 @@ class DashboardState extends ChangeNotifier {
         locationType: locationType,
         moisture: moisture,
         dryToleranceDays: dryToleranceDays,
-        
       );
+
       await loadSensors();
     } catch (e) {
       error = "Creation failed: $e";

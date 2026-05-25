@@ -32,6 +32,7 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
   String password = "";
   bool isLoading = false;
   List<WifiNetwork> networks = [];
+  bool _obscurePassword = true;
 
   @override
   void initState() {
@@ -64,15 +65,18 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
         await Future.delayed(const Duration(milliseconds: 500));
       } catch (_) {}
 
-      await widget.device.connect(timeout: const Duration(seconds: 15), autoConnect: false);
-      
+      await widget.device.connect(
+        timeout: const Duration(seconds: 15),
+        autoConnect: false,
+      );
+
       if (Platform.isAndroid) {
         await widget.device.requestMtu(223).catchError((_) => 0);
       }
 
       var services = await widget.device.discoverServices();
       BluetoothCharacteristic? targetChar;
-      
+
       for (var s in services) {
         // Search for the specific UART Service UUID
         if (s.uuid.toString().toUpperCase().contains("6E400001")) {
@@ -91,13 +95,17 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
         "name": widget.sensorName,
         "plant_type": widget.plantType,
         "location_type": widget.locationType,
-        "dry_tolerance_days": widget.dryToleranceDays, // Sending config to hardware
+        "dry_tolerance_days":
+            widget.dryToleranceDays, // Sending config to hardware
         "ssid": ssid,
         "password": password,
       };
 
       // 3. Write data to the Sensor via Bluetooth
-      await targetChar.write(utf8.encode(jsonEncode(payload)), withoutResponse: false);
+      await targetChar.write(
+        utf8.encode(jsonEncode(payload)),
+        withoutResponse: false,
+      );
       await Future.delayed(const Duration(seconds: 2));
 
       // 4. Create the sensor record in the Cloud/Backend via Provider
@@ -113,7 +121,7 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
       }
 
       await widget.device.disconnect();
-      
+
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,
@@ -125,7 +133,9 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
       print("❌ Error in _handleFinish: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Connection failed. Please restart Bluetooth.")),
+          const SnackBar(
+            content: Text("Connection failed. Please restart Bluetooth."),
+          ),
         );
       }
     } finally {
@@ -145,23 +155,35 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
               isExpanded: true,
               value: networks.any((n) => n.ssid == ssid) ? ssid : null,
               hint: const Text("Select WiFi Network"),
-              items: networks.map((n) => DropdownMenuItem(
-                value: n.ssid, 
-                child: Text(n.ssid!)
-              )).toList(),
+              items: networks
+                  .map(
+                    (n) =>
+                        DropdownMenuItem(value: n.ssid, child: Text(n.ssid!)),
+                  )
+                  .toList(),
               onChanged: (v) => setState(() => ssid = v),
               decoration: const InputDecoration(
-                labelText: "Network SSID", 
-                border: OutlineInputBorder()
+                labelText: "Network SSID",
+                border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 16),
             TextField(
-              decoration: const InputDecoration(
-                labelText: "Password", 
-                border: OutlineInputBorder()
+              decoration: InputDecoration(
+                labelText: "Password",
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _obscurePassword = !_obscurePassword;
+                    });
+                  },
+                ),
               ),
-              obscureText: true,
+              obscureText: _obscurePassword,
               onChanged: (v) => password = v,
             ),
             const Spacer(),
@@ -170,8 +192,8 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
               height: 50,
               child: ElevatedButton(
                 onPressed: isLoading ? null : _handleFinish,
-                child: isLoading 
-                    ? const CircularProgressIndicator(color: Colors.white) 
+                child: isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
                     : const Text("Finish"),
               ),
             ),

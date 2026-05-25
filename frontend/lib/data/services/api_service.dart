@@ -7,7 +7,9 @@ class ApiService {
 
   Future<void> requestManualSample(String sensorId) async {
     try {
-      final url = Uri.parse("$baseUrl/sensors/$sensorId/request-manual");
+      // החלף קולונים ב-underscores בשביל URL
+      String sensorIdForUrl = sensorId.replaceAll(":", "_");
+      final url = Uri.parse("$baseUrl/sensors/$sensorIdForUrl/request-manual");
       final res = await http.post(url).timeout(timeout);
 
       if (res.statusCode != 200) {
@@ -54,7 +56,7 @@ class ApiService {
               "plant_type": plantType,
               "location_type": locationType,
               "moisture": moisture,
-              "dry_tolerance_days": dryToleranceDays, 
+              "dry_tolerance_days": dryToleranceDays,
             }),
           )
           .timeout(timeout);
@@ -70,7 +72,9 @@ class ApiService {
 
   Future<void> renameSensor(String sensorId, String newName) async {
     try {
-      final url = Uri.parse("$baseUrl/sensors/$sensorId/rename");
+      // החלף קולונים ב-underscores בשביל URL
+      String sensorIdForUrl = sensorId.replaceAll(":", "_");
+      final url = Uri.parse("$baseUrl/sensors/$sensorIdForUrl/rename");
       final res = await http
           .post(
             url,
@@ -93,7 +97,9 @@ class ApiService {
       }
 
       final queryParams = <String, String>{};
-      if (sensorId != null) queryParams['sensorId'] = sensorId;
+      // החלף קולונים ב-underscores בשביל URL
+      if (sensorId != null)
+        queryParams['sensorId'] = sensorId.replaceAll(":", "_");
       if (name != null) queryParams['name'] = name;
 
       final url = Uri.parse(
@@ -112,9 +118,7 @@ class ApiService {
 
   Future<void> deleteAllSensors() async {
     try {
-      final url = Uri.parse(
-        '$baseUrl/sensors/delete-all',
-      ); 
+      final url = Uri.parse('$baseUrl/sensors/delete-all');
       final res = await http.delete(url).timeout(timeout);
 
       if (res.statusCode != 200) {

@@ -13,12 +13,13 @@ Preferences prefs;
 #define CHARACTERISTIC_UUID "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
 #define SENSOR_PIN 32
 
-BLEServer* pServer = NULL;
+BLEServer *pServer = NULL;
 
 bool startWifiSetup = false;
 bool bleStopped = false;
 
 unsigned long lastUpdate = 0;
+unsigned long lastCommandCheck = 0;
 
 String savedName;
 String savedSSID;
@@ -26,97 +27,197 @@ String savedPassword;
 String savedPlantType;
 String savedLocationType;
 
-void stopBLE() {
-  if (!bleStopped) {
+// =====================
+// BLE STOP
+// =====================
+void stopBLE()
+{
+  if (!bleStopped)
+  {
     BLEDevice::deinit(true);
     bleStopped = true;
-    Serial.println("🔵 BLE stopped to free memory");
+    Serial.println("🔵 BLE stopped");
   }
 }
 
-void sendMeasurement() {
+// =====================
+// SEND MEASUREMENT
+// =====================
+void sendMeasurement()
+{
 
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("❌ No WiFi Connection");
+  if (WiFi.status() != WL_CONNECTED)
+  {
+    Serial.println("❌ WiFi not connected, skipping measurement");
     return;
   }
 
-  analogRead(SENSOR_PIN);
-  delay(30);
+  // 📊 קריאה מרובה של הסנסור להערכה טובה יותר
+  int sum = 0;
+  for (int i = 0; i < 5; i++)
+  {
+    sum += analogRead(SENSOR_PIN);
+    delay(50);
+  }
+  int rawValue = sum / 5; // ממוצע של 5 קריאות
 
-  int rawValue = analogRead(SENSOR_PIN);
-
+  // ✅ חישוב לחות מתוקן - בדוק אם הערכים נכונים
+  // אם 4095 = יבש ו-800 = רטוב, זה נכון
+  // אם ההפך, החלף את הערכים ל: map(rawValue, 800, 4095, 0, 100)
   int moisturePercent = map(rawValue, 4095, 800, 0, 100);
   moisturePercent = constrain(moisturePercent, 0, 100);
 
-  Serial.println("\n--- 🪴 Measurement ---");
-  Serial.printf("Raw: %d | Moisture: %d%%\n", rawValue, moisturePercent);
+  Serial.printf("🌱 Raw: %d | Moisture: %d%%\n", rawValue, moisturePercent);
 
   WiFiClientSecure client;
   client.setInsecure();
+  client.setTimeout(10000); // 10 שניות timeout
 
   HTTPClient http;
 
   String url = "https://aquamind-0xli.onrender.com/sensors/update";
 
-  if (http.begin(client, url)) {
+  if (http.begin(client, url))
+  {
 
     http.addHeader("Content-Type", "application/json");
-    http.setTimeout(10000);
 
     StaticJsonDocument<128> doc;
-
-    doc["sensor_id"] = WiFi.macAddress();
+    // החלף קולונים ב-underscores בשביל sensor_id
+    String macAddress = WiFi.macAddress();
+    macAddress.replace(":", "_");
+    doc["sensor_id"] = macAddress;
     doc["moisture"] = moisturePercent;
 
     String body;
     serializeJson(doc, body);
+    Serial.printf("📤 Sending: %s\n", body.c_str());
 
     int httpCode = http.POST(body);
 
-    if (httpCode > 0) {
-      Serial.printf("✅ Response: %d\n", httpCode);
-    } else {
-      Serial.printf("❌ HTTP Error: %s\n", http.errorToString(httpCode).c_str());
+    if (httpCode == 200)
+    {
+      Serial.println("✅ Measurement sent successfully");
+    }
+    else
+    {
+      Serial.printf("❌ HTTP Error: %d | Response: %s\n", httpCode, http.getString().c_str());
     }
 
     http.end();
   }
-
-  Serial.println("---------------------\n");
+  else
+  {
+    Serial.println("❌ Failed to connect to server");
+  }
 }
 
-class MyServerCallbacks: public BLEServerCallbacks {
+// =====================
+// NEW: CHECK SERVER COMMAND
+// =====================
+void checkRemoteCommand()
+{
 
-  void onConnect(BLEServer* pServer) {
-    Serial.println("📱 Mobile Connected");
+  if (WiFi.status() != WL_CONNECTED)
+  {
+    return;
   }
 
-  void onDisconnect(BLEServer* pServer) {
-    Serial.println("📱 Mobile Disconnected");
+  WiFiClientSecure client;
+  client.setInsecure();
+  client.setTimeout(10000); // 10 שניות timeout
 
-    if (!startWifiSetup && WiFi.status() != WL_CONNECTED) {
+  HTTPClient http;
+
+  String macAddress = WiFi.macAddress();
+  // החלף קולונים ב-קו תחתון כדי לשלוח את זה כ-URL parameter
+  macAddress.replace(":", "_");
+
+  String url = "https://aquamind-0xli.onrender.com/sensors/command/";
+  url += macAddress;
+
+  if (http.begin(client, url))
+  {
+
+    int code = http.GET();
+
+    if (code == 200)
+    {
+
+      String payload = http.getString();
+      Serial.printf("📥 Server response: %s\n", payload.c_str());
+
+      StaticJsonDocument<128> doc;
+      DeserializationError error = deserializeJson(doc, payload);
+
+      if (error)
+      {
+        Serial.printf("❌ JSON parse error: %s\n", error.c_str());
+      }
+      else
+      {
+        // ✅ תיקון: השתמש ב-.as<bool>() במקום |
+        bool measure = doc["measure"].as<bool>();
+
+        if (measure)
+        {
+          Serial.println("📡 Remote measurement triggered!");
+          sendMeasurement();
+        }
+      }
+    }
+    else
+    {
+      Serial.printf("❌ Server HTTP Error: %d\n", code);
+    }
+
+    http.end();
+  }
+  else
+  {
+    Serial.println("❌ Failed to connect to server for command check");
+  }
+}
+
+// =====================
+// BLE CALLBACKS
+// =====================
+class MyServerCallbacks : public BLEServerCallbacks
+{
+
+  void onConnect(BLEServer *pServer)
+  {
+    Serial.println("📱 Connected");
+  }
+
+  void onDisconnect(BLEServer *pServer)
+  {
+    Serial.println("📱 Disconnected");
+
+    if (!startWifiSetup && WiFi.status() != WL_CONNECTED)
+    {
       pServer->getAdvertising()->start();
     }
   }
 };
 
-class WriteCallback : public BLECharacteristicCallbacks {
+// =====================
+// WIFI CONFIG VIA BLE
+// =====================
+class WriteCallback : public BLECharacteristicCallbacks
+{
 
-  void onWrite(BLECharacteristic *pChar) override {
+  void onWrite(BLECharacteristic *pChar) override
+  {
 
     String value = pChar->getValue();
-
-    if (value.length() == 0) return;
+    if (value.length() == 0)
+      return;
 
     StaticJsonDocument<512> doc;
 
-    DeserializationError err = deserializeJson(doc, value);
-
-    if (err) {
-      Serial.println("❌ JSON parse failed");
+    if (deserializeJson(doc, value))
       return;
-    }
 
     savedName = doc["name"] | "";
     savedSSID = doc["ssid"] | "";
@@ -124,27 +225,33 @@ class WriteCallback : public BLECharacteristicCallbacks {
     savedPlantType = doc["plant_type"] | "pot";
     savedLocationType = doc["location_type"] | "indoor";
 
-    Serial.println("📩 Config received");
-
     startWifiSetup = true;
   }
 };
 
-void registerSensor() {
+// =====================
+// REGISTER SENSOR
+// =====================
+void registerSensor()
+{
 
   WiFiClientSecure client;
   client.setInsecure();
+  client.setTimeout(10000); // 10 seconds timeout
 
   HTTPClient http;
 
-  if (http.begin(client, "https://aquamind-0xli.onrender.com/sensors/create")) {
+  if (http.begin(client, "https://aquamind-0xli.onrender.com/sensors/create"))
+  {
 
     http.addHeader("Content-Type", "application/json");
-    http.setTimeout(10000);
 
     StaticJsonDocument<256> doc;
 
-    doc["sensor_id"] = WiFi.macAddress();
+    // שלח sensor_id עם underscores במקום underscores
+    String macAddress = WiFi.macAddress();
+    macAddress.replace(":", "_");
+    doc["sensor_id"] = macAddress;
     doc["name"] = savedName;
     doc["plant_type"] = savedPlantType;
     doc["location_type"] = savedLocationType;
@@ -152,45 +259,57 @@ void registerSensor() {
 
     String body;
     serializeJson(doc, body);
+    Serial.printf("📝 Registering sensor: %s\n", body.c_str());
 
-    int code = http.POST(body);
+    int httpCode = http.POST(body);
 
-    Serial.printf("📡 Register response: %d\n", code);
+    if (httpCode == 200 || httpCode == 201)
+    {
+      Serial.println("✅ Sensor registered successfully");
+    }
+    else
+    {
+      Serial.printf("❌ Registration failed: %d | %s\n", httpCode, http.getString().c_str());
+    }
 
     http.end();
   }
+  else
+  {
+    Serial.println("❌ Failed to connect to server for registration");
+  }
 }
 
-void handleWifiSetup() {
+// =====================
+// WIFI SETUP
+// =====================
+void handleWifiSetup()
+{
 
-  Serial.println("⚙️ Starting WiFi setup");
+  Serial.println("⚙️ WiFi setup");
 
-  if (pServer) pServer->getAdvertising()->stop();
-
-  delay(500);
+  if (pServer)
+    pServer->getAdvertising()->stop();
 
   stopBLE();
 
   WiFi.disconnect(true);
   delay(500);
 
-  WiFi.mode(WIFI_STA);
   WiFi.begin(savedSSID.c_str(), savedPassword.c_str());
-
-  Serial.print("Connecting");
 
   int tries = 0;
 
-  while (WiFi.status() != WL_CONNECTED && tries < 20) {
+  while (WiFi.status() != WL_CONNECTED && tries < 20)
+  {
     delay(1000);
-    Serial.print(".");
     tries++;
   }
 
-  if (WiFi.status() == WL_CONNECTED) {
+  if (WiFi.status() == WL_CONNECTED)
+  {
 
-    Serial.println("\n✨ WiFi Connected");
-    Serial.println(WiFi.localIP());
+    Serial.println("✅ WiFi Connected");
 
     prefs.begin("sensor", false);
     prefs.putString("ssid", savedSSID);
@@ -198,38 +317,28 @@ void handleWifiSetup() {
     prefs.end();
 
     registerSensor();
-
     sendMeasurement();
-  }
-  else {
-
-    Serial.println("\n❌ WiFi Failed");
-
-    delay(3000);
-    ESP.restart();
   }
 }
 
-void setup() {
+// =====================
+// SETUP
+// =====================
+void setup()
+{
 
   Serial.begin(115200);
-
-  delay(1000);
-
-  Serial.println("🚀 AquaMind Booting");
-
   analogReadResolution(12);
 
   prefs.begin("sensor", true);
+
   String ssid = prefs.getString("ssid", "");
   String pass = prefs.getString("password", "");
+
   prefs.end();
 
-  if (ssid != "" && ssid != "null") {
-
-    Serial.print("🔄 Reconnecting to ");
-    Serial.println(ssid);
-
+  if (ssid != "")
+  {
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid.c_str(), pass.c_str());
   }
@@ -239,53 +348,58 @@ void setup() {
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
 
-  BLEService *pService = pServer->createService(SERVICE_UUID);
+  BLEService *service = pServer->createService(SERVICE_UUID);
 
-  BLECharacteristic *pChar = pService->createCharacteristic(
-    CHARACTERISTIC_UUID,
-    BLECharacteristic::PROPERTY_WRITE
-  );
+  BLECharacteristic *characteristic = service->createCharacteristic(
+      CHARACTERISTIC_UUID,
+      BLECharacteristic::PROPERTY_WRITE);
 
-  pChar->setCallbacks(new WriteCallback());
+  characteristic->setCallbacks(new WriteCallback());
 
-  pService->start();
+  service->start();
+  BLEDevice::getAdvertising()->start();
 
-  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
-  pAdvertising->addServiceUUID(SERVICE_UUID);
-  pAdvertising->start();
-
-  Serial.println("📡 BLE Ready");
+  Serial.println("📡 Ready");
 }
 
-void loop() {
+// =====================
+// LOOP
+// =====================
+void loop()
+{
 
-  if (startWifiSetup) {
-
+  if (startWifiSetup)
+  {
     startWifiSetup = false;
-
     handleWifiSetup();
   }
 
-  if (WiFi.status() == WL_CONNECTED) {
+  if (WiFi.status() == WL_CONNECTED)
+  {
 
-    if (millis() - lastUpdate > 15000) {
-
+    // 🌱 שלח מדידה כל 15 שניות
+    if (millis() - lastUpdate > 15000)
+    {
       lastUpdate = millis();
-
+      Serial.println("\n📡 Sending periodic measurement...");
       sendMeasurement();
     }
-  }
-  else {
 
-    static unsigned long lastRetry = 0;
-
-    if (millis() - lastRetry > 30000) {
-
-      lastRetry = millis();
-
-      Serial.println("⚠️ WiFi lost - reconnecting");
-
-      WiFi.reconnect();
+    // 🔥 בדוק פקודות מהשרת כל 10 שניות
+    if (millis() - lastCommandCheck > 10000)
+    {
+      lastCommandCheck = millis();
+      Serial.println("\n🔍 Checking for remote commands...");
+      checkRemoteCommand();
     }
   }
+  else
+  {
+    // חיכה קצת לפני הנסיון חוזר
+    delay(1000);
+    WiFi.reconnect();
+    Serial.println("⚠️  WiFi disconnected, retrying...");
+  }
+
+  delay(100); // תן ל-other tasks להשתנות
 }

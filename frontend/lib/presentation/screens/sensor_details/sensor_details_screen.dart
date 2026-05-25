@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../state/dashboard_state.dart';
@@ -18,7 +19,7 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<DashboardState>();
-    // מוצאים את הגרסה המעודכנת של החיישן מתוך ה-State למקרה שהנתונים השתנו
+
     final currentSensor = state.sensors.firstWhere(
       (s) => s.sensorId == widget.sensor.sensorId,
       orElse: () => widget.sensor,
@@ -68,15 +69,17 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
           ),
         ],
       ),
+
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // כרטיס המדידה הראשי
             Card(
               elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
@@ -90,37 +93,105 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
                         ),
                         Text(
                           "${currentSensor.moisture.toStringAsFixed(1)}%",
-                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          style: Theme.of(context).textTheme.headlineMedium
+                              ?.copyWith(
                                 color: Colors.blue,
                                 fontWeight: FontWeight.bold,
                               ),
                         ),
                       ],
                     ),
+
                     const SizedBox(height: 20),
+
                     SizedBox(
                       width: double.infinity,
                       height: 50,
                       child: ElevatedButton.icon(
-                        onPressed: _isMeasuring ? null : () async {
-                          setState(() => _isMeasuring = true);
-                          // רענון מהשרת (ה-ESP ממילא מעדכן כל 30 שניות)
-                          await state.fetchSensors();
-                          if (mounted) {
-                            setState(() => _isMeasuring = false);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("Data updated from server")),
-                            );
-                          }
-                        },
-                        icon: _isMeasuring 
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : const Icon(Icons.refresh),
-                        label: Text(_isMeasuring ? "Measuring..." : "Measure Now"),
+                        onPressed: _isMeasuring
+                            ? null
+                            : () async {
+                                if (_isMeasuring) return;
+
+                                setState(() => _isMeasuring = true);
+
+                                try {
+                                  // ✅ קריאה ל-requestMeasurement עם timeout
+                                  await state.requestMeasurement(
+                                    currentSensor.sensorId,
+                                  );
+
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          "✅ Measurement requested - waiting for data...",
+                                        ),
+                                        duration: Duration(seconds: 2),
+                                      ),
+                                    );
+                                  }
+
+                                  // ✅ קצור delay מ-2 שניות ל-1 שנייה בלבד
+                                  await Future.delayed(
+                                    const Duration(seconds: 1),
+                                  );
+
+                                  await state.fetchSensors();
+                                } on TimeoutException catch (e) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: const Text(
+                                          "⏱️ Request timed out - server may be slow",
+                                        ),
+                                        backgroundColor: Colors.orange,
+                                        duration: const Duration(seconds: 4),
+                                      ),
+                                    );
+                                  }
+                                  print("❌ Timeout: $e");
+                                } catch (e) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          "❌ Error: ${e.toString().split('\n').first}",
+                                        ),
+                                        backgroundColor: Colors.red,
+                                        duration: const Duration(seconds: 3),
+                                      ),
+                                    );
+                                  }
+                                  print("❌ Error requesting measurement: $e");
+                                }
+
+                                if (mounted) {
+                                  setState(() => _isMeasuring = false);
+                                }
+                              },
+
+                        icon: _isMeasuring
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.water_drop),
+
+                        label: Text(
+                          _isMeasuring ? "Measuring..." : "Measure Now",
+                        ),
+
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.green,
                           foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
                       ),
                     ),
@@ -130,53 +201,36 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
             ),
 
             const SizedBox(height: 24),
-            const Text("Information", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+
+            const Text(
+              "Information",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+
             const Divider(),
-            
+
             ListTile(
               leading: const Icon(Icons.info_outline),
               title: const Text("Status"),
               trailing: Text(state.statusText),
             ),
+
             ListTile(
               leading: const Icon(Icons.grass),
               title: const Text("Plant Type"),
               trailing: Text(currentSensor.plantType),
             ),
+
             ListTile(
               leading: const Icon(Icons.location_on_outlined),
               title: const Text("Location"),
               trailing: Text(currentSensor.locationType),
             ),
+
             ListTile(
               leading: const Icon(Icons.access_time),
               title: const Text("Last Updated"),
               trailing: Text(currentSensor.lastUpdate.toString()),
-            ),
-
-            const SizedBox(height: 24),
-            const Text(
-              "History",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              height: 150,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade200,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              alignment: Alignment.center,
-              child: const Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.show_chart, size: 40, color: Colors.grey),
-                  SizedBox(height: 8),
-                  Text("Graph Placeholder", style: TextStyle(color: Colors.grey)),
-                ],
-              ),
             ),
           ],
         ),
@@ -199,8 +253,6 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
           title: const Text("Rename Sensor"),
           content: TextField(
             controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(labelText: "Sensor Name"),
             onChanged: (value) => newName = value,
           ),
           actions: [
