@@ -377,16 +377,16 @@ void loop()
   if (WiFi.status() == WL_CONNECTED)
   {
 
-    // 🌱 שלח מדידה כל 15 שניות
-    if (millis() - lastUpdate > 15000)
+    // 🌱 שלח מדידה כל 60 שניות
+    if (millis() - lastUpdate > 60000)
     {
       lastUpdate = millis();
       Serial.println("\n📡 Sending periodic measurement...");
       sendMeasurement();
     }
 
-    // 🔥 בדוק פקודות מהשרת כל 5 שניות
-    if (millis() - lastCommandCheck > 5000)
+    //  בדוק פקודות מהשרת כל 2 שניות
+    if (millis() - lastCommandCheck > 2000)
     {
       lastCommandCheck = millis();
       Serial.println("\n🔍 Checking for remote commands...");
