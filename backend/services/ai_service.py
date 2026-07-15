@@ -1,13 +1,11 @@
 import os
 import json
+import traceback
 from google import genai
 from google.genai import types
 
-# Load the verified Gemini API key dynamically from Render's environment variables.
-# Fallback to the hardcoded one only if the environment variable is not set.
 API_KEY = os.getenv("GEMINI_API_KEY", "AQ.Ab8RN6KMip2Gz8fYttjpf5Dm1wXlOCpZB4lhUobLlTEz08HT5Q")
 
-# Initialize the Gemini Client using the official google-genai SDK
 client = genai.Client(api_key=API_KEY)
 
 def analyze_plant_image(image_bytes: bytes) -> dict:
@@ -18,18 +16,16 @@ def analyze_plant_image(image_bytes: bytes) -> dict:
     
     prompt = """
     Analyze this plant image and provide configuration details for a smart irrigation system.
-    Provide the common English name of the plant, recommended watering interval in days, 
-    optimal moisture percentage, light requirements, and a short 2-sentence description in English.
+    You must return a valid JSON object matching the requested schema.
+    All text values inside the JSON must be strictly in English.
     """
 
-    # Properly construct the image part using the correct google-genai types structure
     image_part = types.Part.from_bytes(
         data=image_bytes,
         mime_type="image/jpeg",
     )
 
     try:
-        # Request generation using JSON Schema to guarantee a strict JSON response
         response = client.models.generate_content(
             model='gemini-1.5-flash',
             contents=[prompt, image_part],
@@ -55,11 +51,13 @@ def analyze_plant_image(image_bytes: bytes) -> dict:
             ),
         )
         
-        # Since we enforced schema validation, response.text is guaranteed to be clean JSON
+        print(f"DEBUG: Gemini raw response text: {response.text}")
         return json.loads(response.text)
         
     except Exception as e:
-        # Fallback error response if parsing or generation fails
+        print("❌ ERROR inside analyze_plant_image:")
+        traceback.print_exc()
+        
         return {
             "error": "Failed to analyze image or parse AI data",
             "details": str(e)
