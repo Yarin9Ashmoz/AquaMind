@@ -1,12 +1,14 @@
+import os
 import json
 from google import genai
 from google.genai import types
 
-# Verified Gemini API key from Google AI Studio
-GEMINI_API_KEY = "AQ.Ab8RN6KMip2Gz8fYttjpf5Dm1wXlOCpZB4lhUobLlTEz08HT5Q"
+# Load the verified Gemini API key dynamically from Render's environment variables.
+# Fallback to the hardcoded one only if the environment variable is not set.
+API_KEY = os.getenv("GEMINI_API_KEY", "AQ.Ab8RN6KMip2Gz8fYttjpf5Dm1wXlOCpZB4lhUobLlTEz08HT5Q")
 
 # Initialize the Gemini Client using the official google-genai SDK
-client = genai.Client(api_key=GEMINI_API_KEY)
+client = genai.Client(api_key=API_KEY)
 
 def analyze_plant_image(image_bytes: bytes) -> dict:
     """
@@ -14,38 +16,47 @@ def analyze_plant_image(image_bytes: bytes) -> dict:
     structured JSON configuration details entirely in English.
     """
     
-    # Strict prompt forcing the model to reply ONLY with a valid JSON payload in English
     prompt = """
     Analyze this plant image and provide configuration details for a smart irrigation system.
-    You must return the response strictly as a valid JSON object with the following keys, and nothing else (no markdown, no backticks).
-    All text values inside the JSON must be strictly in English:
-    {
-      "plant_name": "Common English name of the plant",
-      "watering_frequency_days": "integer, recommended interval between waterings in days",
-      "optimal_moisture_percentage": "integer, target soil moisture percentage (0-100)",
-      "light_requirement": "English description of light needs (e.g., Full Sun, Partial Shade, Low Light)",
-      "short_info": "A short, 2-sentence description of the plant and care tips in English"
-    }
+    Provide the common English name of the plant, recommended watering interval in days, 
+    optimal moisture percentage, light requirements, and a short 2-sentence description in English.
     """
 
-    # Convert raw bytes into the format required by the Google GenAI SDK
+    # Properly construct the image part using the correct google-genai types structure
     image_part = types.Part.from_bytes(
         data=image_bytes,
         mime_type="image/jpeg",
     )
 
     try:
-        # Request generation from Gemini 1.5 Flash (multimodal, highly efficient)
+        # Request generation using JSON Schema to guarantee a strict JSON response
         response = client.models.generate_content(
             model='gemini-1.5-flash',
-            contents=[prompt, image_part]
+            contents=[prompt, image_part],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "plant_name": types.Schema(type=types.Type.STRING),
+                        "watering_frequency_days": types.Schema(type=types.Type.INTEGER),
+                        "optimal_moisture_percentage": types.Schema(type=types.Type.INTEGER),
+                        "light_requirement": types.Schema(type=types.Type.STRING),
+                        "short_info": types.Schema(type=types.Type.STRING),
+                    },
+                    required=[
+                        "plant_name", 
+                        "watering_frequency_days", 
+                        "optimal_moisture_percentage", 
+                        "light_requirement", 
+                        "short_info"
+                    ],
+                ),
+            ),
         )
         
-        # Clean potential markdown block formatting from the text response
-        clean_text = response.text.strip().replace("```json", "").replace("```", "")
-        
-        # Parse the string into a Python dictionary
-        return json.loads(clean_text)
+        # Since we enforced schema validation, response.text is guaranteed to be clean JSON
+        return json.loads(response.text)
         
     except Exception as e:
         # Fallback error response if parsing or generation fails

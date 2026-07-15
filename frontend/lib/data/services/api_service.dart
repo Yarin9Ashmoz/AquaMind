@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:image_picker/image_picker.dart'; 
+import 'package:image_picker/image_picker.dart';
+import 'package:http_parser/http_parser.dart';
 
 class ApiService {
   final String baseUrl = "https://aquamind-0xli.onrender.com";
@@ -131,29 +132,36 @@ class ApiService {
   // ==========================================
   // NEW: AI Plant Identification Function
   // ==========================================
-  
+
   /// Triggers the device camera to take a picture, uploads it to the Render backend,
   /// and returns a Map containing Gemini-generated plant configurations in English.
   Future<Map<String, dynamic>?> identifyPlantWithAI() async {
     try {
       final ImagePicker picker = ImagePicker();
-      
+
       // 1. Open the native device camera to capture an image
       final XFile? image = await picker.pickImage(
         source: ImageSource.camera,
         imageQuality: 80, // Compress slightly to optimize network upload speed
       );
-      
+
       // If the user backs out without snapping a picture, exit safely
       if (image == null) return null;
 
       // 2. Prepare multipart request for file uploading
-      // Pointing to the newly registered plant router endpoint on your Render backend
+      // Double check if your FastAPI router endpoint is "/plant/identify" or "/plants/identify"
       final url = Uri.parse("$baseUrl/plants/identify");
       final request = http.MultipartRequest('POST', url);
-      
+
       // Attach the image file under the 'file' parameter key expected by our FastAPI router
-      request.files.add(await http.MultipartFile.fromPath('file', image.path));
+      // Adding the explicit 'image/jpeg' contentType to prevent 400 Validation errors!
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'file',
+          image.path,
+          contentType: MediaType('image', 'jpeg'),
+        ),
+      );
 
       // 3. Dispatch the request with a timeout guard
       final streamedResponse = await request.send().timeout(timeout);
@@ -163,7 +171,9 @@ class ApiService {
         // Decode the clean, strict English JSON configuration received from the Gemini-powered backend
         return jsonDecode(res.body) as Map<String, dynamic>;
       } else {
-        throw Exception("Server responded with code: ${res.statusCode} - ${res.body}");
+        throw Exception(
+          "Server responded with code: ${res.statusCode} - ${res.body}",
+        );
       }
     } catch (e) {
       print("❌ ApiService Error (identifyPlantWithAI): $e");
