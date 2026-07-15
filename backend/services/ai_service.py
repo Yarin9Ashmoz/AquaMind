@@ -6,7 +6,11 @@ from google.genai import types
 
 API_KEY = os.getenv("GEMINI_API_KEY", "AQ.Ab8RN6KMip2Gz8fYttjpf5Dm1wXlOCpZB4lhUobLlTEz08HT5Q")
 
-client = genai.Client(api_key=API_KEY)
+# Forcing the client to use 'v1' stable version instead of 'v1beta' can resolve model availability issues
+client = genai.Client(
+    api_key=API_KEY,
+    http_options={'api_version': 'v1'}
+)
 
 def analyze_plant_image(image_bytes: bytes) -> dict:
     """
