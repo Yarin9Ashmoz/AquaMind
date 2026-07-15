@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart'; 
 
 class ApiService {
   final String baseUrl = "https://aquamind-0xli.onrender.com";
@@ -7,7 +8,6 @@ class ApiService {
 
   Future<void> requestManualSample(String sensorId) async {
     try {
-      // החלף קולונים ב-underscores בשביל URL
       String sensorIdForUrl = sensorId.replaceAll(":", "_");
       final url = Uri.parse("$baseUrl/sensors/$sensorIdForUrl/request-manual");
       final res = await http.post(url).timeout(timeout);
@@ -72,7 +72,6 @@ class ApiService {
 
   Future<void> renameSensor(String sensorId, String newName) async {
     try {
-      // החלף קולונים ב-underscores בשביל URL
       String sensorIdForUrl = sensorId.replaceAll(":", "_");
       final url = Uri.parse("$baseUrl/sensors/$sensorIdForUrl/rename");
       final res = await http
@@ -97,7 +96,6 @@ class ApiService {
       }
 
       final queryParams = <String, String>{};
-      // החלף קולונים ב-underscores בשביל URL
       if (sensorId != null)
         queryParams['sensorId'] = sensorId.replaceAll(":", "_");
       if (name != null) queryParams['name'] = name;
@@ -126,6 +124,49 @@ class ApiService {
       }
     } catch (e) {
       print("❌ ApiService Error (deleteAllSensors): $e");
+      rethrow;
+    }
+  }
+
+  // ==========================================
+  // NEW: AI Plant Identification Function
+  // ==========================================
+  
+  /// Triggers the device camera to take a picture, uploads it to the Render backend,
+  /// and returns a Map containing Gemini-generated plant configurations in English.
+  Future<Map<String, dynamic>?> identifyPlantWithAI() async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      
+      // 1. Open the native device camera to capture an image
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 80, // Compress slightly to optimize network upload speed
+      );
+      
+      // If the user backs out without snapping a picture, exit safely
+      if (image == null) return null;
+
+      // 2. Prepare multipart request for file uploading
+      // Pointing to the newly registered plant router endpoint on your Render backend
+      final url = Uri.parse("$baseUrl/plants/identify");
+      final request = http.MultipartRequest('POST', url);
+      
+      // Attach the image file under the 'file' parameter key expected by our FastAPI router
+      request.files.add(await http.MultipartFile.fromPath('file', image.path));
+
+      // 3. Dispatch the request with a timeout guard
+      final streamedResponse = await request.send().timeout(timeout);
+      final res = await http.Response.fromStream(streamedResponse);
+
+      if (res.statusCode == 200) {
+        // Decode the clean, strict English JSON configuration received from the Gemini-powered backend
+        return jsonDecode(res.body) as Map<String, dynamic>;
+      } else {
+        throw Exception("Server responded with code: ${res.statusCode} - ${res.body}");
+      }
+    } catch (e) {
+      print("❌ ApiService Error (identifyPlantWithAI): $e");
       rethrow;
     }
   }

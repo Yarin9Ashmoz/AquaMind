@@ -3,7 +3,8 @@ from database.db import Base, engine
 # 1. IMPORTANT: Import all models here so SQLAlchemy detects them
 # This ensures that Base.metadata.create_all actually finds your tables
 from models.sensor import Sensor 
-from routers import sensors
+# Import routers
+from routers import sensors, plant  # Added 'plant' router here
 
 # 2. Create tables in the database (if they don't exist)
 # This command runs every time the server starts
@@ -15,8 +16,9 @@ except Exception as e:
 
 app = FastAPI(title="AquaMind API")
 
-# 3. Include the sensors router
+# 3. Include routers
 app.include_router(sensors.router)
+app.include_router(plant.router)  # Registered the new Plant AI router
 
 # 4. Root endpoint for health check
 @app.get("/")
