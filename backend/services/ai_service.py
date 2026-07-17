@@ -1,9 +1,10 @@
 import os
 import json
 import traceback
+import importlib.metadata
 from google import genai
 from google.genai import types
-import importlib.metadata
+
 print(
     "google-genai version:",
     importlib.metadata.version("google-genai")
@@ -32,28 +33,27 @@ def analyze_plant_image(image_bytes: bytes) -> dict:
 
     try:
         response = client.models.generate_content(
-            model='gemini-2.0-flash',
+            model='gemini-1.5-flash',
             contents=[prompt, image_part],
             config=types.GenerateContentConfig(
-                # Using exact snake_case strings to prevent SDK/API mapping issues
                 response_mime_type="application/json",
-                response_schema={
-                    "type": "OBJECT",
-                    "properties": {
-                        "plant_name": {"type": "STRING"},
-                        "watering_frequency_days": {"type": "INTEGER"},
-                        "optimal_moisture_percentage": {"type": "INTEGER"},
-                        "light_requirement": {"type": "STRING"},
-                        "short_info": {"type": "STRING"},
+                response_schema=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "plant_name": types.Schema(type=types.Type.STRING),
+                        "watering_frequency_days": types.Schema(type=types.Type.INTEGER),
+                        "optimal_moisture_percentage": types.Schema(type=types.Type.INTEGER),
+                        "light_requirement": types.Schema(type=types.Type.STRING),
+                        "short_info": types.Schema(type=types.Type.STRING),
                     },
-                    "required": [
+                    required=[
                         "plant_name", 
                         "watering_frequency_days", 
                         "optimal_moisture_percentage", 
                         "light_requirement", 
                         "short_info"
                     ],
-                },
+                ),
             ),
         )
         
