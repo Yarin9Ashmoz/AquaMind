@@ -5,7 +5,9 @@ import 'package:http_parser/http_parser.dart';
 
 class ApiService {
   final String baseUrl = "https://aquamind-0xli.onrender.com";
-  final Duration timeout = const Duration(seconds: 30);
+  
+  // Increased to 90 seconds across the board to absorb Render's slow spin-up/cold start times safely.
+  final Duration timeout = const Duration(seconds: 90);
 
   Future<void> requestManualSample(String sensorId) async {
     try {
@@ -149,12 +151,9 @@ class ApiService {
       if (image == null) return null;
 
       // 2. Prepare multipart request for file uploading
-      // Double check if your FastAPI router endpoint is "/plant/identify" or "/plants/identify"
       final url = Uri.parse("$baseUrl/plants/identify");
       final request = http.MultipartRequest('POST', url);
 
-      // Attach the image file under the 'file' parameter key expected by our FastAPI router
-      // Adding the explicit 'image/jpeg' contentType to prevent 400 Validation errors!
       request.files.add(
         await http.MultipartFile.fromPath(
           'file',
@@ -163,7 +162,7 @@ class ApiService {
         ),
       );
 
-      // 3. Dispatch the request with a timeout guard
+      // 3. Dispatch the request with the updated 90-second timeout guard
       final streamedResponse = await request.send().timeout(timeout);
       final res = await http.Response.fromStream(streamedResponse);
 
