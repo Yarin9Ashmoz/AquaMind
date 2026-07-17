@@ -32,7 +32,7 @@ def analyze_plant_image(image_bytes: bytes) -> dict:
 
     try:
         response = client.models.generate_content(
-            model='gemini-1.5-flash',
+            model='gemini-2.0-flash',
             contents=[prompt, image_part],
             config=types.GenerateContentConfig(
                 # Using exact snake_case strings to prevent SDK/API mapping issues
