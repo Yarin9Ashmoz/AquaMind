@@ -3,14 +3,15 @@ import json
 import traceback
 from google import genai
 from google.genai import types
+import importlib.metadata
+print(
+    "google-genai version:",
+    importlib.metadata.version("google-genai")
+)
 
 API_KEY = os.getenv("GEMINI_API_KEY", "AQ.Ab8RN6KMip2Gz8fYttjpf5Dm1wXlOCpZB4lhUobLlTEz08HT5Q")
 
-# Keep using 'v1' for model availability, but we will fix the config fields below
-client = genai.Client(
-    api_key=API_KEY,
-    http_options={'api_version': 'v1'}
-)
+client = genai.Client(api_key=API_KEY)
 
 def analyze_plant_image(image_bytes: bytes) -> dict:
     """

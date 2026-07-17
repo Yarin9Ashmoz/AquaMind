@@ -3,5 +3,5 @@ uvicorn
 sqlalchemy
 psycopg2-binary
 python-multipart
-google-genai
+google-genai>=1.0.0
 pydantic
