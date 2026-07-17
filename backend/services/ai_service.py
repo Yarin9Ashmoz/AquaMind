@@ -12,7 +12,11 @@ print(
 
 API_KEY = os.getenv("GEMINI_API_KEY", "AQ.Ab8RN6KMip2Gz8fYttjpf5Dm1wXlOCpZB4lhUobLlTEz08HT5Q")
 
-client = genai.Client(api_key=API_KEY)
+# Force client to stable v1 API
+client = genai.Client(
+    api_key=API_KEY,
+    http_options={'api_version': 'v1'}
+)
 
 def analyze_plant_image(image_bytes: bytes) -> dict:
     """
@@ -20,9 +24,18 @@ def analyze_plant_image(image_bytes: bytes) -> dict:
     structured JSON configuration details entirely in English.
     """
     
+    # We enforce JSON structure directly in the prompt to avoid SDK mapping bugs
     prompt = """
     Analyze this plant image and provide configuration details for a smart irrigation system.
-    You must return a valid JSON object matching the requested schema.
+    You must return ONLY a raw JSON object matching the following structure:
+    {
+        "plant_name": "Common English name of the plant",
+        "watering_frequency_days": 3,  # Integer value
+        "optimal_moisture_percentage": 60,  # Integer percentage (0-100)
+        "light_requirement": "High / Medium / Low",
+        "short_info": "A short 2-sentence description in English."
+    }
+    Do not wrap the JSON in ```json markdown code blocks, just return the raw JSON text.
     All text values inside the JSON must be strictly in English.
     """
 
@@ -34,31 +47,20 @@ def analyze_plant_image(image_bytes: bytes) -> dict:
     try:
         response = client.models.generate_content(
             model='gemini-1.5-flash',
-            contents=[prompt, image_part],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=types.Schema(
-                    type=types.Type.OBJECT,
-                    properties={
-                        "plant_name": types.Schema(type=types.Type.STRING),
-                        "watering_frequency_days": types.Schema(type=types.Type.INTEGER),
-                        "optimal_moisture_percentage": types.Schema(type=types.Type.INTEGER),
-                        "light_requirement": types.Schema(type=types.Type.STRING),
-                        "short_info": types.Schema(type=types.Type.STRING),
-                    },
-                    required=[
-                        "plant_name", 
-                        "watering_frequency_days", 
-                        "optimal_moisture_percentage", 
-                        "light_requirement", 
-                        "short_info"
-                    ],
-                ),
-            ),
+            contents=[prompt, image_part]
         )
         
         print(f"DEBUG: Gemini raw response text: {response.text}")
-        return json.loads(response.text)
+        
+        # Clean potential markdown wrapping just in case the model ignored instructions
+        clean_text = response.text.strip()
+        if clean_text.startswith("```json"):
+            clean_text = clean_text[7:]
+        if clean_text.endswith("```"):
+            clean_text = clean_text[:-3]
+        clean_text = clean_text.strip()
+        
+        return json.loads(clean_text)
         
     except Exception as e:
         print("❌ ERROR inside analyze_plant_image:")
