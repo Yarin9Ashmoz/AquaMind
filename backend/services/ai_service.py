@@ -18,6 +18,17 @@ client = genai.Client(
     http_options={'api_version': 'v1'}
 )
 
+client = genai.Client(
+    api_key=API_KEY,
+    http_options={'api_version': 'v1'}
+)
+
+print("=== Available Gemini models ===")
+for model in client.models.list():
+    print(model.name)
+print("===============================")
+
+
 def analyze_plant_image(image_bytes: bytes) -> dict:
     """
     Sends the raw plant image bytes to Gemini 1.5 Flash and returns 
