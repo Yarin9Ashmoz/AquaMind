@@ -18,6 +18,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    // Trigger the initial data fetch safely after the first frame
     Future.microtask(() {
       context.read<DashboardState>().loadSensors();
     });
@@ -25,6 +26,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Listen to state changes from DashboardState
     final state = context.watch<DashboardState>();
 
     return Scaffold(
@@ -50,7 +52,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               messenger.showSnackBar(
                 const SnackBar(content: Text('Sampling...')),
               );
+              
+              // Force refresh data
               await state.loadSensors();
+              
               if (context.mounted) {
                 messenger.showSnackBar(
                   const SnackBar(content: Text('Sample complete')),
@@ -61,6 +66,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
 
+      // Conditional rendering based on the UI state
       body: state.isLoading
           ? const Center(child: CupertinoActivityIndicator())
           : state.error != null
@@ -107,6 +113,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // Modern card layout showcasing moisture levels visually
   Widget _buildSensorCard(Sensor sensor) {
     final moisture = sensor.moisture;
     final status = _getStatus(moisture);
@@ -116,30 +123,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 20,
-          vertical: 14,
-        ),
-        leading: Icon(Icons.eco, color: Colors.green, size: 28),
-        title: Text(
-          sensor.name,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-        ),
-        subtitle: Text(
-          "Moisture: $moisture% • $status",
-          style: TextStyle(color: statusColor, fontSize: 14),
-        ),
-        trailing: const Icon(CupertinoIcons.chevron_forward, size: 20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
         onTap: () {
           Navigator.push(
             context,
@@ -148,10 +142,97 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           );
         },
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header Row: Plant/Sensor Name and Arrow Icon
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: Colors.green.withOpacity(0.1),
+                        child: const Icon(Icons.eco, color: Colors.green, size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        sensor.name,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Icon(CupertinoIcons.chevron_forward, size: 18, color: Colors.grey),
+                ],
+              ),
+              const SizedBox(height: 20),
+              
+              // Status Row: Label and Colored Tag
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Moisture Level",
+                    style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      status,
+                      style: TextStyle(
+                        color: statusColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              
+              // Progress Row: Visual Indicator Bar and Percentage Text
+              Row(
+                children: [
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: moisture / 100, // Converts percentage to 0.0 - 1.0 range
+                        backgroundColor: Colors.grey[200],
+                        valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+                        minHeight: 8,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    "${moisture.toStringAsFixed(0)}%",
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
+  // Placeholder screen when no hardware/sensors are linked yet
   Widget _buildEmptyState() {
     return Center(
       child: Padding(
@@ -177,6 +258,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // Business logic to evaluate data thresholds
   String _getStatus(double moisture) {
     if (moisture < 20) return "Dry";
     if (moisture < 40) return "Low";
@@ -184,6 +266,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return "Wet";
   }
 
+  // Theme map to match visual system colors with state thresholds
   Color _getStatusColor(String status) {
     switch (status) {
       case "Dry":
