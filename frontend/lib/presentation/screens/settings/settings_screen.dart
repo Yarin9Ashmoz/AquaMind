@@ -1,9 +1,18 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../state/dashboard_state.dart'; // וודא שהנתיב ל-State נכון
+import '../../state/dashboard_state.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _moistureAlertsEnabled = true;
+  double _alertThreshold = 25.0;
 
   @override
   Widget build(BuildContext context) {
@@ -12,160 +21,193 @@ class SettingsScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text(
           "System Settings",
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            color: Colors.black87,
+            fontWeight: FontWeight.w600,
+            fontSize: 18,
+          ),
         ),
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: const IconThemeData(color: Colors.black87),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         children: [
           _buildSectionTitle("Monitoring & Alerts"),
-          Card(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+          _buildSettingsGroup([
+            SwitchListTile(
+              secondary: const Icon(
+                Icons.notifications_active_outlined,
+                color: Colors.orange,
+              ),
+              title: const Text(
+                "Moisture Alerts",
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+              subtitle: const Text(
+                "Get a notification when your plant needs water",
+              ),
+              value: _moistureAlertsEnabled,
+              activeColor: Colors.blue,
+              onChanged: (val) {
+                setState(() => _moistureAlertsEnabled = val);
+              },
             ),
-            child: Column(
-              children: [
-                SwitchListTile(
-                  secondary: const Icon(
-                    Icons.notifications_active,
-                    color: Colors.orange,
-                  ),
-                  title: const Text("Moisture Alerts"),
-                  subtitle: const Text(
-                    "Get a notification when your plant needs water",
-                  ),
-                  value: true,
-                  onChanged: (val) {},
+            const Divider(height: 1, indent: 56),
+            ListTile(
+              leading: const Icon(
+                Icons.shutter_speed_outlined,
+                color: Colors.blue,
+              ),
+              title: const Text(
+                "Alert Threshold",
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+              subtitle: Slider(
+                value: _alertThreshold,
+                min: 0,
+                max: 100,
+                divisions: 20,
+                activeColor: Colors.blue,
+                inactiveColor: Colors.grey[200],
+                label: "${_alertThreshold.toStringAsFixed(0)}%",
+                onChanged: _moistureAlertsEnabled
+                    ? (v) => setState(() => _alertThreshold = v)
+                    : null,
+              ),
+              trailing: Text(
+                "${_alertThreshold.toStringAsFixed(0)}%",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                  color: _moistureAlertsEnabled ? Colors.black87 : Colors.grey,
                 ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.shutter_speed, color: Colors.blue),
-                  title: const Text("Alert Threshold"),
-                  subtitle: Slider(
-                    value: 25,
-                    min: 0,
-                    max: 100,
-                    divisions: 20,
-                    label: "25%",
-                    onChanged: (v) {},
-                  ),
-                  trailing: const Text(
-                    "25%",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-          const SizedBox(height: 24),
+          ]),
+          const SizedBox(height: 28),
+
           _buildSectionTitle("Device Configuration"),
-          Card(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+          _buildSettingsGroup([
+            ListTile(
+              leading: const Icon(Icons.timer_outlined, color: Colors.green),
+              title: const Text(
+                "Data Sync Interval",
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+              subtitle: const Text("Every 30 minutes"),
+              trailing: Icon(
+                Icons.chevron_right_rounded,
+                color: Colors.grey[400],
+              ),
+              onTap: () {},
             ),
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.timer, color: Colors.green),
-                  title: const Text("Data Sync Interval"),
-                  subtitle: const Text("Every 30 minutes"),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap: () {},
+            const Divider(height: 1, indent: 56),
+            ListTile(
+              leading: const Icon(Icons.wifi_rounded, color: Colors.purple),
+              title: const Text(
+                "Network Status",
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+              trailing: const Text(
+                "Connected",
+                style: TextStyle(
+                  color: Colors.green,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
                 ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.wifi, color: Colors.purple),
-                  title: const Text("Network Status"),
-                  trailing: const Text(
-                    "Connected",
-                    style: TextStyle(
-                      color: Colors.green,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-          const SizedBox(height: 24),
-          _buildSectionTitle("Danger Zone"), // הוספת כותרת לאזור רגיש
-          Card(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.delete_forever, color: Colors.red),
-                  title: const Text(
-                    "Delete All Sensors",
-                    style: TextStyle(
-                      color: Colors.red,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  subtitle: const Text("Wipe all data from the database"),
-                  trailing: const Icon(
-                    Icons.arrow_forward_ios,
-                    size: 16,
-                    color: Colors.red,
-                  ),
-                  onTap: () => _showDeleteConfirmation(context),
+          ]),
+          const SizedBox(height: 28),
+
+          _buildSectionTitle("Danger Zone"),
+          _buildSettingsGroup([
+            ListTile(
+              leading: const Icon(
+                Icons.delete_forever_outlined,
+                color: Colors.redAccent,
+              ),
+              title: const Text(
+                "Delete All Sensors",
+                style: TextStyle(
+                  color: Colors.redAccent,
+                  fontWeight: FontWeight.w600,
                 ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.person_remove, color: Colors.red),
-                  title: const Text(
-                    "Delete Sensor by Name/ID",
-                    style: TextStyle(
-                      color: Colors.red,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  subtitle: const Text(
-                    "Remove a single sensor from the database",
-                  ),
-                  trailing: const Icon(
-                    Icons.arrow_forward_ios,
-                    size: 16,
-                    color: Colors.red,
-                  ),
-                  onTap: () => _showDeleteSingleSensorDialog(context),
-                ),
-              ],
+              ),
+              subtitle: const Text(
+                "Wipe all data from the database permanently",
+              ),
+              trailing: Icon(
+                Icons.chevron_right_rounded,
+                color: Colors.redAccent.withOpacity(0.5),
+              ),
+              onTap: () => _showDeleteConfirmation(context),
             ),
-          ),
-          const SizedBox(height: 24),
+            const Divider(height: 1, indent: 56),
+            ListTile(
+              leading: const Icon(
+                Icons.remove_circle_outline_rounded,
+                color: Colors.redAccent,
+              ),
+              title: const Text(
+                "Delete Sensor by Name/ID",
+                style: TextStyle(
+                  color: Colors.redAccent,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              subtitle: const Text("Remove a single operational node asset"),
+              trailing: Icon(
+                Icons.chevron_right_rounded,
+                color: Colors.redAccent.withOpacity(0.5),
+              ),
+              onTap: () => _showDeleteSingleSensorDialog(context),
+            ),
+          ]),
+          const SizedBox(height: 28),
+
           _buildSectionTitle("Cloud Server"),
-          Card(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: ListTile(
-              leading: const Icon(Icons.cloud_done, color: Colors.cyan),
-              title: const Text("Server Status"),
+          _buildSettingsGroup([
+            ListTile(
+              leading: const Icon(
+                Icons.cloud_done_outlined,
+                color: Colors.cyan,
+              ),
+              title: const Text(
+                "Server Status",
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
               subtitle: const Text("Render Cloud - Singapore"),
               trailing: Container(
-                width: 12,
-                height: 12,
+                width: 10,
+                height: 10,
                 decoration: const BoxDecoration(
                   color: Colors.green,
                   shape: BoxShape.circle,
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 32),
-          TextButton.icon(
-            onPressed: () {},
-            icon: const Icon(Icons.refresh, color: Colors.grey),
-            label: const Text(
-              "Reset All Settings",
-              style: TextStyle(color: Colors.grey),
+          ]),
+          const SizedBox(height: 36),
+
+          Center(
+            child: TextButton.icon(
+              onPressed: () {},
+              icon: const Icon(
+                Icons.refresh_rounded,
+                color: Colors.grey,
+                size: 18,
+              ),
+              label: const Text(
+                "Reset All Settings",
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ),
           ),
         ],
@@ -175,47 +217,70 @@ class SettingsScreen extends StatelessWidget {
 
   Widget _buildSectionTitle(String title) {
     return Padding(
-      padding: const EdgeInsets.only(left: 8, bottom: 8),
+      padding: const EdgeInsets.only(left: 4, bottom: 10),
       child: Text(
         title.toUpperCase(),
         style: TextStyle(
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: FontWeight.bold,
-          color: Colors.grey[600],
-          letterSpacing: 1.1,
+          color: Colors.grey[500],
+          letterSpacing: 1.2,
         ),
       ),
     );
   }
 
-  /// מציג דיאלוג אישור לפני מחיקה
+  // Wrapper utility constructing uniform elevated settings modules
+  Widget _buildSettingsGroup(List<Widget> children) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.015),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: children),
+    );
+  }
+
   void _showDeleteConfirmation(BuildContext context) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Confirm Deletion"),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text("Confirm Full Purge"),
         content: const Text(
-          "Are you sure you want to delete all sensors? This action cannot be undone.",
+          "Are you sure you want to wipe all linked sensors? This cannot be undone.",
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel"),
+            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
             onPressed: () async {
-              Navigator.pop(ctx); // סגירת הדיאלוג
-
+              Navigator.pop(ctx);
               try {
-                // הפעלת פונקציית המחיקה מה-State
                 await context.read<DashboardState>().deleteAllSensors();
-
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text("All sensors deleted successfully"),
-                      backgroundColor: Colors.green,
+                      content: Text(
+                        "All sensors successfully cleared from profile",
+                      ),
+                      backgroundColor: Colors.black87,
                     ),
                   );
                 }
@@ -223,8 +288,8 @@ class SettingsScreen extends StatelessWidget {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text("Failed to delete: $e"),
-                      backgroundColor: Colors.red,
+                      content: Text("Wipe execution error: $e"),
+                      backgroundColor: Colors.redAccent,
                     ),
                   );
                 }
@@ -242,77 +307,108 @@ class SettingsScreen extends StatelessWidget {
 
   void _showDeleteSingleSensorDialog(BuildContext context) {
     final controller = TextEditingController();
-    var selectedType = 'sensorId';
+    String selectedType = 'sensorId';
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Delete Sensor"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            DropdownButtonFormField<String>(
-              value: selectedType,
-              items: const [
-                DropdownMenuItem(value: 'sensorId', child: Text('Sensor ID')),
-                DropdownMenuItem(value: 'name', child: Text('Sensor Name')),
-              ],
-              onChanged: (value) {
-                if (value != null) selectedType = value;
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text("Erase Target Node"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                value: selectedType,
+                items: const [
+                  DropdownMenuItem(value: 'sensorId', child: Text('Sensor ID')),
+                  DropdownMenuItem(value: 'name', child: Text('Sensor Name')),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setDialogState(() => selectedType = value);
+                  }
+                },
+                decoration: InputDecoration(
+                  labelText: 'Identify Asset By',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                decoration: InputDecoration(
+                  labelText: selectedType == 'sensorId'
+                      ? 'Enter Sensor unique ID'
+                      : 'Enter Sensor Name',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                controller.dispose();
+                Navigator.pop(ctx);
               },
-              decoration: const InputDecoration(labelText: 'Delete by'),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
             ),
-            TextField(
-              controller: controller,
-              decoration: const InputDecoration(labelText: 'ID or Name'),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: () async {
+                final value = controller.text.trim();
+                if (value.isEmpty) return;
+
+                Navigator.pop(ctx);
+                try {
+                  if (selectedType == 'sensorId') {
+                    await context.read<DashboardState>().deleteSensorById(
+                      value,
+                    );
+                  } else {
+                    await context.read<DashboardState>().deleteSensorByName(
+                      value,
+                    );
+                  }
+
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Erase sequence completed for "$value"'),
+                        backgroundColor: Colors.black87,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Target erasure failure: $e'),
+                        backgroundColor: Colors.redAccent,
+                      ),
+                    );
+                  }
+                } finally {
+                  controller.dispose();
+                }
+              },
+              child: const Text('Confirm'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              final value = controller.text.trim();
-              if (value.isEmpty) return;
-
-              Navigator.pop(ctx);
-
-              try {
-                if (selectedType == 'sensorId') {
-                  await context.read<DashboardState>().deleteSensorById(value);
-                } else {
-                  await context.read<DashboardState>().deleteSensorByName(
-                    value,
-                  );
-                }
-
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Deleted sensor with $selectedType "$value"',
-                      ),
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Failed to delete sensor: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
-            },
-            child: const Text('Delete'),
-          ),
-        ],
       ),
     );
   }
