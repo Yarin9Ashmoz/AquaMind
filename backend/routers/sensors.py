@@ -2,8 +2,6 @@ from typing import List, Optional, Dict
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from database.db import SessionLocal
-from models.sensor import Sensor
-from datetime import datetime
 
 from schemas.sensors import (
     SensorCreate,
@@ -11,9 +9,11 @@ from schemas.sensors import (
     SensorRename,
     SensorResponse,
 )
+from services.sensor_service import SensorService
 
 router = APIRouter(prefix="/sensors", tags=["sensors"])
 
+# In-memory store for pending telemetry commands
 manual_requests: Dict[str, bool] = {}
 
 def get_db():
@@ -28,34 +28,19 @@ def get_db():
 # ---------------------------
 @router.get("", response_model=List[SensorResponse])
 def get_sensors(db: Session = Depends(get_db)):
-    return db.query(Sensor).all()
+    return SensorService.get_all_sensors(db)
 
 # ---------------------------
-# CREATE
+# CREATE / UPSERT
 # ---------------------------
 @router.post("/create")
 def create_sensor(data: SensorCreate, db: Session = Depends(get_db)):
     try:
-        existing = db.query(Sensor).filter(Sensor.sensor_id == data.sensor_id).first()
-        if existing:
-            print(f"⚠️  Sensor {data.sensor_id} already exists")
-            return {"status": "already_exists", "sensor_id": data.sensor_id}
-
-        sensor = Sensor(
-            **data.dict(),
-            last_update=datetime.utcnow()
-        )
-
-        db.add(sensor)
-        db.commit()
-        db.refresh(sensor)
-        
-        print(f"✅ Sensor {data.sensor_id} created successfully")
-        return {"status": "ok", "sensor_id": data.sensor_id, "name": sensor.name}
-
+        sensor = SensorService.create_or_update_sensor(db, data)
+        return {"status": "ok", "sensor_id": sensor.sensor_id, "name": sensor.name}
     except Exception as e:
         db.rollback()
-        print(f"Error creating sensor: {e}")
+        print(f"❌ Error during sensor registration: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # ---------------------------
@@ -63,50 +48,35 @@ def create_sensor(data: SensorCreate, db: Session = Depends(get_db)):
 # ---------------------------
 @router.post("/update")
 def update_sensor_data(data: SensorUpdate, db: Session = Depends(get_db)):
-
-    sensor = db.query(Sensor).filter(Sensor.sensor_id == data.sensor_id).first()
-
+    sensor = SensorService.update_moisture(db, data)
     if not sensor:
-        print(f"Sensor {data.sensor_id} not found for update")
-        raise HTTPException(status_code=404, detail="Sensor not found")
+        raise HTTPException(status_code=404, detail="Sensor target not registered")
 
-    old_moisture = sensor.moisture
-    sensor.moisture = data.moisture
-    sensor.last_update = datetime.utcnow()
+    # Clear pending manual trigger flag after successfully consuming measurement
+    sensor_key = SensorService._normalize_id(data.sensor_id)
+    manual_requests[sensor_key] = False
 
-    manual_requests[data.sensor_id] = False
-
-    db.commit()
-    
-    print(f"Sensor {data.sensor_id} updated: {old_moisture}% → {data.moisture}%")
-
-    return {"status": "updated", "sensor_id": data.sensor_id, "moisture": data.moisture}
+    return {"status": "updated", "sensor_id": sensor.sensor_id, "moisture": sensor.moisture}
 
 # ---------------------------
-# REQUEST MEASURE (FIXED)
+# REQUEST MEASURE
 # ---------------------------
 @router.post("/{sensor_id}/request-manual")
 def request_manual(sensor_id: str):
-    sensor_id_with_colons = sensor_id.replace("_", ":")
-    
-    manual_requests[sensor_id_with_colons] = True
-
-    print(f"Manual request for {sensor_id_with_colons}")
-
+    sensor_key = SensorService._normalize_id(sensor_id)
+    manual_requests[sensor_key] = True
     return {"status": "ok"}
 
 # ---------------------------
-# ESP POLLING (FIXED + SAFE)
+# ESP POLLING
 # ---------------------------
 @router.get("/command/{sensor_id}")
 def get_command(sensor_id: str):
-    sensor_id_with_colons = sensor_id.replace("_", ":")
-    
-    value = manual_requests.get(sensor_id_with_colons, False)
+    sensor_key = SensorService._normalize_id(sensor_id)
+    value = manual_requests.get(sensor_key, False)
 
     if value:
-        print(f"Sending measurement command to {sensor_id_with_colons}")
-        manual_requests[sensor_id_with_colons] = False
+        manual_requests[sensor_key] = False
     
     return {"measure": value}
 
@@ -115,15 +85,9 @@ def get_command(sensor_id: str):
 # ---------------------------
 @router.post("/{sensor_id}/rename")
 def rename_sensor(sensor_id: str, data: SensorRename, db: Session = Depends(get_db)):
-    sensor_id_with_colons = sensor_id.replace("_", ":")
-
-    sensor = db.query(Sensor).filter(Sensor.sensor_id == sensor_id_with_colons).first()
-
+    sensor = SensorService.rename_sensor(db, sensor_id, data.name)
     if not sensor:
-        raise HTTPException(status_code=404, detail="Sensor not found")
-
-    sensor.name = data.name
-    db.commit()
+        raise HTTPException(status_code=404, detail="Sensor target not registered")
 
     return {"status": "ok"}
 
@@ -136,32 +100,16 @@ def delete_sensor(
     name: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    if sensor_id:
-        sensor_id = sensor_id.replace("_", ":")
+    deleted_count = SensorService.delete_sensor(db, sensor_id=sensor_id, name=name)
+    if deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Sensor target not registered")
 
-    query = db.query(Sensor)
-
-    if sensor_id:
-        query = query.filter(Sensor.sensor_id == sensor_id)
-
-    if name:
-        query = query.filter(Sensor.name == name)
-
-    deleted = query.delete(synchronize_session=False)
-
-    if deleted == 0:
-        raise HTTPException(status_code=404, detail="Sensor not found")
-
-    db.commit()
-    return {"deleted": deleted}
+    return {"deleted": deleted_count}
 
 # ---------------------------
 # DELETE ALL
 # ---------------------------
 @router.delete("/delete-all")
 def delete_all(db: Session = Depends(get_db)):
-
-    num = db.query(Sensor).delete()
-    db.commit()
-
-    return {"deleted": num}
+    deleted_count = SensorService.delete_all_sensors(db)
+    return {"deleted": deleted_count}
