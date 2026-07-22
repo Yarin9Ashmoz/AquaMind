@@ -4,8 +4,12 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http_parser/http_parser.dart';
 
 class ApiService {
+  //Use for local testing with a local backend server.
+  //static const String baseUrl = 'http://10.0.0.18:8000';
+
+  // Use for production with the Render backend server.
   final String baseUrl = "https://aquamind-0xli.onrender.com";
-  
+
   // Increased to 90 seconds across the board to absorb Render's slow spin-up/cold start times safely.
   final Duration timeout = const Duration(seconds: 90);
 
