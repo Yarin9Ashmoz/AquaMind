@@ -1,14 +1,21 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, func
-from database.db import Base
+from sqlalchemy import Column, String, Float, Integer, DateTime
+from datetime import datetime, timezone
+from database import Base
 
 class Sensor(Base):
     __tablename__ = "sensors"
 
-    id = Column(Integer, primary_key=True, index=True)
-    sensor_id = Column(String, unique=True, index=True, nullable=False)
-    name = Column(String, default="AquaMind Sensor")
-    plant_type = Column(String, default="General Plant")
-    location_type = Column(String, default="indoor")
-    moisture = Column(Float, default=0.0)
-    last_update = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    dry_tolerance_days = Column(Integer, default=3)
+    sensor_id = Column(String, primary_key=True, index=True)
+    name = Column(String, nullable=True)
+    plant_type = Column(String, nullable=True)
+    location_type = Column(String, nullable=True)
+    dry_tolerance_days = Column(Integer, nullable=True, default=3)
+    
+    # Telemetry parameters
+    moisture = Column(Float, nullable=True, default=0.0)
+    
+    # Custom configurations synchronized from application settings
+    moisture_threshold = Column(Float, nullable=False, default=25.0)
+    sync_interval_minutes = Column(Integer, nullable=False, default=30)
+    
+    last_update = Column(DateTime, default=lambda: datetime.now(timezone.utc))

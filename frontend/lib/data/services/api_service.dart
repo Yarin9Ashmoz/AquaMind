@@ -4,8 +4,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http_parser/http_parser.dart';
 
 class ApiService {
-  //Use for local testing with a local backend server.
-  //static const String baseUrl = 'http://10.0.0.18:8000';
+  // Use for local testing with a local backend server.
+  // static const String baseUrl = 'http://10.0.0.18:8000';
 
   // Use for production with the Render backend server.
   final String baseUrl = "https://aquamind-0xli.onrender.com";
@@ -39,6 +39,37 @@ class ApiService {
       return jsonDecode(res.body);
     } catch (e) {
       print("❌ ApiService Error (getSensors): $e");
+      rethrow;
+    }
+  }
+
+  /// Sends a PATCH request to update moisture threshold and sync interval
+  Future<void> updateSensorConfig({
+    required String sensorId,
+    required double threshold,
+    required int syncInterval,
+  }) async {
+    try {
+      // Pass sensorId directly in the URL path
+      final url = Uri.parse("$baseUrl/api/v1/sensors/config");
+      final res = await http
+          .patch(
+            url,
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({
+              "moisture_threshold": threshold,
+              "sync_interval_minutes": syncInterval,
+            }),
+          )
+          .timeout(timeout);
+
+      if (res.statusCode != 200) {
+        throw Exception(
+          "Failed to update sensor config: ${res.statusCode} - ${res.body}",
+        );
+      }
+    } catch (e) {
+      print("❌ ApiService Error (updateSensorConfig): $e");
       rethrow;
     }
   }
@@ -103,8 +134,9 @@ class ApiService {
       }
 
       final queryParams = <String, String>{};
-      if (sensorId != null)
+      if (sensorId != null) {
         queryParams['sensorId'] = sensorId.replaceAll(":", "_");
+      }
       if (name != null) queryParams['name'] = name;
 
       final url = Uri.parse(

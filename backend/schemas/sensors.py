@@ -1,28 +1,32 @@
-from pydantic import BaseModel, Field
-from datetime import datetime
+from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime
 
 class SensorBase(BaseModel):
-    name: Optional[str] = "AquaMind Sensor"
-    plant_type: Optional[str] = "General Plant"
-    location_type: Optional[str] = "indoor"
-    dry_tolerance_days: Optional[int] = Field(default=3, ge=0, le=14)
+    name: Optional[str] = None
+    plant_type: Optional[str] = None
+    location_type: Optional[str] = None
+    dry_tolerance_days: Optional[int] = 3
 
 class SensorCreate(SensorBase):
     sensor_id: str
-    moisture: Optional[float] = 0.0
+    moisture_threshold: Optional[float] = 25.0
+    sync_interval_minutes: Optional[int] = 30
 
 class SensorUpdate(BaseModel):
     sensor_id: str
     moisture: float
 
-class SensorRename(BaseModel):
-    name: str
+class SensorConfigUpdate(BaseModel):
+    sensor_id: str
+    moisture_threshold: Optional[float] = None
+    sync_interval_minutes: Optional[int] = None
 
 class SensorResponse(SensorBase):
-    id: Optional[int] = None
     sensor_id: str
     moisture: float
+    moisture_threshold: float
+    sync_interval_minutes: int
     last_update: datetime
 
     class Config:

@@ -54,6 +54,37 @@ class DashboardState extends ChangeNotifier {
     }
   }
 
+  /// Updates threshold and sync interval configurations for a target node
+  Future<void> updateSensorConfig({
+    required String sensorId,
+    required double threshold,
+    required int syncInterval,
+  }) async {
+    try {
+      error = null;
+      isActionLoading = true;
+      notifyListeners();
+
+      // Dispatch repository update command
+      await repo.updateSensorConfig(
+        sensorId: sensorId,
+        threshold: threshold,
+        syncInterval: syncInterval,
+      );
+
+      // Refresh local sensor payload to reflect new configurations
+      await loadSensors();
+    } catch (e) {
+      error = "Failed to update sensor config: $e";
+      print("❌ Error updating sensor config: $e");
+      notifyListeners();
+      rethrow;
+    } finally {
+      isActionLoading = false;
+      notifyListeners();
+    }
+  }
+
   /// Requests the remote ESP32 unit to execute an instantaneous analog moisture measurement
   Future<void> requestMeasurement(String sensorId) async {
     try {

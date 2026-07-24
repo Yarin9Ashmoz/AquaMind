@@ -13,6 +13,48 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _moistureAlertsEnabled = true;
   double _alertThreshold = 25.0;
+  int _syncIntervalMinutes = 30;
+
+  @override
+  void initState() {
+    super.initState();
+    // Load existing sensor configurations from state upon screen initialization
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final dashboardState = context.read<DashboardState>();
+      if (dashboardState.sensors.isNotEmpty) {
+        final activeSensor = dashboardState.sensors.first;
+        setState(() {
+          _alertThreshold = activeSensor.moistureThreshold ?? 25.0;
+          _syncIntervalMinutes = activeSensor.syncIntervalMinutes ?? 30;
+          _moistureAlertsEnabled = _alertThreshold > 0;
+        });
+      }
+    });
+  }
+
+  // Dispatch modified configuration to cloud server via provider
+  Future<void> _saveConfigToServer() async {
+    try {
+      final dashboardState = context.read<DashboardState>();
+      if (dashboardState.sensors.isNotEmpty) {
+        final activeSensor = dashboardState.sensors.first;
+        await dashboardState.updateSensorConfig(
+          sensorId: activeSensor.sensorId,
+          threshold: _moistureAlertsEnabled ? _alertThreshold : 0.0,
+          syncInterval: _syncIntervalMinutes,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update cloud configuration: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +95,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               activeColor: Colors.blue,
               onChanged: (val) {
                 setState(() => _moistureAlertsEnabled = val);
+                _saveConfigToServer();
               },
             ),
             const Divider(height: 1, indent: 56),
@@ -76,6 +119,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onChanged: _moistureAlertsEnabled
                     ? (v) => setState(() => _alertThreshold = v)
                     : null,
+                onChangeEnd: (v) => _saveConfigToServer(),
               ),
               trailing: Text(
                 "${_alertThreshold.toStringAsFixed(0)}%",
@@ -97,12 +141,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 "Data Sync Interval",
                 style: TextStyle(fontWeight: FontWeight.w500),
               ),
-              subtitle: const Text("Every 30 minutes"),
-              trailing: Icon(
-                Icons.chevron_right_rounded,
-                color: Colors.grey[400],
+              subtitle: Text("Every $_syncIntervalMinutes minutes"),
+              trailing: PopupMenuButton<int>(
+                icon: Icon(
+                  Icons.chevron_right_rounded,
+                  color: Colors.grey[400],
+                ),
+                onSelected: (int newInterval) {
+                  setState(() => _syncIntervalMinutes = newInterval);
+                  _saveConfigToServer();
+                },
+                itemBuilder: (BuildContext context) => <PopupMenuEntry<int>>[
+                  const PopupMenuItem<int>(
+                    value: 5,
+                    child: Text('Every 5 minutes'),
+                  ),
+                  const PopupMenuItem<int>(
+                    value: 15,
+                    child: Text('Every 15 minutes'),
+                  ),
+                  const PopupMenuItem<int>(
+                    value: 30,
+                    child: Text('Every 30 minutes'),
+                  ),
+                  const PopupMenuItem<int>(
+                    value: 60,
+                    child: Text('Every 1 hour'),
+                  ),
+                ],
               ),
-              onTap: () {},
             ),
             const Divider(height: 1, indent: 56),
             ListTile(
@@ -180,7 +247,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 "Server Status",
                 style: TextStyle(fontWeight: FontWeight.w500),
               ),
-              subtitle: const Text("Render Cloud - Singapore"),
+              subtitle: const Text("Render Cloud Active"),
               trailing: Container(
                 width: 10,
                 height: 10,
@@ -195,7 +262,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           Center(
             child: TextButton.icon(
-              onPressed: () {},
+              onPressed: () {
+                setState(() {
+                  _alertThreshold = 25.0;
+                  _syncIntervalMinutes = 30;
+                  _moistureAlertsEnabled = true;
+                });
+                _saveConfigToServer();
+              },
               icon: const Icon(
                 Icons.refresh_rounded,
                 color: Colors.grey,
@@ -230,7 +304,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // Wrapper utility constructing uniform elevated settings modules
   Widget _buildSettingsGroup(List<Widget> children) {
     return Container(
       decoration: BoxDecoration(
@@ -277,9 +350,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text(
-                        "All sensors successfully cleared from profile",
-                      ),
+                      content: Text("All sensors successfully cleared"),
                       backgroundColor: Colors.black87,
                     ),
                   );
@@ -288,7 +359,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text("Wipe execution error: $e"),
+                      content: Text("Wipe error: $e"),
                       backgroundColor: Colors.redAccent,
                     ),
                   );

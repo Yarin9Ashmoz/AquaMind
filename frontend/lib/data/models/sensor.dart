@@ -1,52 +1,54 @@
 class Sensor {
   final String sensorId;
-  String name;
+  final String? name;
+  final String? plantType;
+  final String? locationType;
+  final int? dryToleranceDays;
   final double moisture;
-  final String plantType; // pot / garden
-  final String locationType; // indoor / outdoor
-  final DateTime lastUpdate;
-  final int dryToleranceDays; 
+  final double? moistureThreshold;
+  final int? syncIntervalMinutes;
+  final DateTime? lastUpdate;
 
   Sensor({
     required this.sensorId,
-    required this.name,
+    this.name,
+    this.plantType,
+    this.locationType,
+    this.dryToleranceDays = 3,
     required this.moisture,
-    required this.plantType,
-    required this.locationType,
-    required this.lastUpdate,
-    this.dryToleranceDays = 3, 
+    this.moistureThreshold = 25.0,
+    this.syncIntervalMinutes = 30,
+    this.lastUpdate,
   });
 
   factory Sensor.fromJson(Map<String, dynamic> json) {
-    
-    final sensorId = json["sensor_id"] ?? json["sensorId"] ?? "";
-    final plantType = json["plant_type"] ?? json["plantType"] ?? "";
-    final locationType =
-        json["location_type"] ?? json["locationType"] ?? "indoor";
-    final lastUpdateRaw = json["last_update"] ?? json["lastUpdate"] ?? "";
-    
-    final dryTolerance = json["dry_tolerance_days"] ?? json["dryToleranceDays"] ?? 3;
-
     return Sensor(
-      sensorId: sensorId,
-      name: json["name"] ?? "",
-      moisture: (json["moisture"] as num?)?.toDouble() ?? 0,
-      plantType: plantType,
-      locationType: locationType,
-      lastUpdate: DateTime.tryParse(lastUpdateRaw) ?? DateTime.now(),
-      dryToleranceDays: dryTolerance is int ? dryTolerance : int.parse(dryTolerance.toString()),
+      sensorId: json['sensor_id'] ?? json['sensorId'] ?? '',
+      name: json['name'],
+      plantType: json['plant_type'],
+      locationType: json['location_type'],
+      dryToleranceDays: json['dry_tolerance_days'],
+      moisture: (json['moisture'] as num?)?.toDouble() ?? 0.0,
+      moistureThreshold:
+          (json['moisture_threshold'] as num?)?.toDouble() ?? 25.0,
+      syncIntervalMinutes: json['sync_interval_minutes'] ?? 30,
+      lastUpdate: json['last_update'] != null
+          ? DateTime.tryParse(json['last_update'])
+          : null,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      "sensor_id": sensorId,
-      "name": name,
-      "moisture": moisture,
-      "plant_type": plantType,
-      "location_type": locationType,
-      "last_update": lastUpdate.toIso8601String(),
-      "dry_tolerance_days": dryToleranceDays,
+      'sensor_id': sensorId,
+      'name': name,
+      'plant_type': plantType,
+      'location_type': locationType,
+      'dry_tolerance_days': dryToleranceDays,
+      'moisture': moisture,
+      'moisture_threshold': moistureThreshold,
+      'sync_interval_minutes': syncIntervalMinutes,
+      'last_update': lastUpdate?.toIso8601String(),
     };
   }
 }

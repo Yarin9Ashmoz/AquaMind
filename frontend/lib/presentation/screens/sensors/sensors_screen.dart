@@ -75,7 +75,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
             const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
             const SizedBox(height: 16),
             Text(
-              "Sync Error: ${state.error}",
+              "Sync Error: ${state.error ?? ''}",
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Colors.black87,
@@ -143,14 +143,14 @@ class _SensorsScreenState extends State<SensorsScreen> {
           final s = state.sensors[i];
 
           // Dynamic colors mapped directly against hardware telemetry
-          final Color moistureColor = s.moisture < 30.0
+          final Color moistureColor = (s.moisture ?? 0) < 30.0
               ? Colors.orange
               : Colors.blue;
 
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
             child: Dismissible(
-              key: ValueKey(s.sensorId),
+              key: ValueKey(s.sensorId ?? i.toString()),
               direction: DismissDirection.endToStart,
               background: Container(
                 alignment: Alignment.centerRight,
@@ -193,7 +193,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
                     ),
                   ),
                   title: Text(
-                    s.name,
+                    s.name ?? "Unnamed Sensor",
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       color: Colors.black87,
@@ -206,7 +206,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
                         Icon(Icons.opacity, size: 14, color: moistureColor),
                         const SizedBox(width: 4),
                         Text(
-                          "Moisture: ${s.moisture.toStringAsFixed(1)}%",
+                          "Moisture: ${(s.moisture ?? 0.0).toStringAsFixed(1)}%",
                           style: TextStyle(
                             color: Colors.grey[700],
                             fontWeight: FontWeight.w600,
@@ -252,13 +252,16 @@ class _SensorsScreenState extends State<SensorsScreen> {
     BuildContext context,
     dynamic sensor,
   ) async {
+    final String sensorName = sensor.name?.toString() ?? "Sensor";
+    final String sensorId = sensor.sensorId?.toString() ?? "";
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Remove Sensor Asset?'),
         content: Text(
-          'Are you sure you want to delete "${sensor.name}" from your cloud dashboard? This action is permanent.',
+          'Are you sure you want to delete "$sensorName" from your cloud dashboard? This action is permanent.',
         ),
         actions: [
           TextButton(
@@ -281,11 +284,11 @@ class _SensorsScreenState extends State<SensorsScreen> {
     );
 
     if (confirmed ?? false) {
-      await context.read<DashboardState>().deleteSensorById(sensor.sensorId);
+      await context.read<DashboardState>().deleteSensorById(sensorId);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Removed entity target "${sensor.name}"'),
+            content: Text('Removed entity target "$sensorName"'),
             backgroundColor: Colors.black87,
           ),
         );
@@ -296,7 +299,10 @@ class _SensorsScreenState extends State<SensorsScreen> {
 
   // Inline model to inject target label mutations smoothly
   void _showRenameDialog(BuildContext context, dynamic sensor) {
-    String newName = sensor.name;
+    final String currentName = sensor.name?.toString() ?? "";
+    final String sensorId = sensor.sensorId?.toString() ?? "";
+    String newName = currentName;
+
     showDialog(
       context: context,
       builder: (context) {
@@ -308,7 +314,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
           content: TextField(
             autofocus: true,
             decoration: InputDecoration(
-              hintText: sensor.name,
+              hintText: currentName,
               labelText: "Updated Sensor Title",
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -325,7 +331,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
               onPressed: () {
                 if (newName.trim().isNotEmpty) {
                   context.read<DashboardState>().renameSensor(
-                    sensor.sensorId,
+                    sensorId,
                     newName.trim(),
                   );
                 }

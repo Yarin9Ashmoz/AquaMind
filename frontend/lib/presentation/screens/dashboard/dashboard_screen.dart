@@ -33,7 +33,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Deduplicate array locally as a safety shield against backend list duplication
     final uniqueSensorsMap = <String, Sensor>{};
     for (var sensor in state.sensors) {
-      // Use unique sensor identifier (id or sensorId field)
+      // Use unique sensor identifier (sensorId)
       uniqueSensorsMap[sensor.sensorId] = sensor;
     }
     final displaySensors = uniqueSensorsMap.values.toList();
@@ -139,7 +139,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildDashboardContent(List<Sensor> sensors) {
     // Computing micro-telemetry metrics across all connected hardware objects
     final totalSensors = sensors.length;
-    final drySensors = sensors.where((s) => s.moisture < 30.0).length;
+    final drySensors = sensors.where((s) {
+      final threshold = s.moistureThreshold ?? 25.0;
+      return s.moisture < threshold;
+    }).length;
+
     final avgMoisture =
         sensors.map((s) => s.moisture).reduce((a, b) => a + b) / totalSensors;
 
@@ -237,7 +241,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildSensorCard(Sensor sensor) {
     final moisture = sensor.moisture;
-    final status = _getStatus(moisture);
+    final threshold = sensor.moistureThreshold ?? 25.0;
+    final status = _getStatus(moisture, threshold);
     final statusColor = _getStatusColor(status);
 
     return Container(
@@ -286,7 +291,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        sensor.name,
+                        sensor.name ?? 'Sensor ${sensor.sensorId}',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -341,7 +346,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(6),
                       child: LinearProgressIndicator(
-                        value: moisture / 100,
+                        value: (moisture / 100).clamp(0.0, 1.0),
                         backgroundColor: Colors.grey[100],
                         valueColor: AlwaysStoppedAnimation<Color>(statusColor),
                         minHeight: 8,
@@ -400,10 +405,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  String _getStatus(double moisture) {
-    if (moisture < 20) return "Dry";
-    if (moisture < 40) return "Low";
-    if (moisture < 70) return "Good";
+  String _getStatus(double moisture, double threshold) {
+    if (moisture < threshold) return "Dry";
+    if (moisture < threshold + 15) return "Low";
+    if (moisture < 75) return "Good";
     return "Wet";
   }
 

@@ -12,6 +12,19 @@ class SensorRepository {
     return data.map<Sensor>((json) => Sensor.fromJson(json)).toList();
   }
 
+  /// Updates threshold and sync interval configuration on remote server
+  Future<void> updateSensorConfig({
+    required String sensorId,
+    required double threshold,
+    required int syncInterval,
+  }) async {
+    await api.updateSensorConfig(
+      sensorId: sensorId,
+      threshold: threshold,
+      syncInterval: syncInterval,
+    );
+  }
+
   Future<void> requestManualSample(String sensorId) async {
     await api.requestManualSample(sensorId);
   }

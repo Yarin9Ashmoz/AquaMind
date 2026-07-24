@@ -2,7 +2,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from models.sensor import Sensor
-from schemas.sensors import SensorCreate, SensorUpdate
+from schemas.sensors import SensorCreate, SensorUpdate, SensorConfigUpdate
 
 class SensorService:
 
@@ -29,7 +29,6 @@ class SensorService:
         existing_sensor = db.query(Sensor).filter(Sensor.sensor_id == sensor_key).first()
 
         if existing_sensor:
-            # Atomic metadata update pattern
             if data.name:
                 existing_sensor.name = data.name
             if data.plant_type:
@@ -38,13 +37,16 @@ class SensorService:
                 existing_sensor.location_type = data.location_type
             if data.dry_tolerance_days is not None:
                 existing_sensor.dry_tolerance_days = data.dry_tolerance_days
+            if data.moisture_threshold is not None:
+                existing_sensor.moisture_threshold = data.moisture_threshold
+            if data.sync_interval_minutes is not None:
+                existing_sensor.sync_interval_minutes = data.sync_interval_minutes
             
             existing_sensor.last_update = datetime.now(timezone.utc)
             db.commit()
             db.refresh(existing_sensor)
             return existing_sensor
 
-        # Instantiate new physical asset record
         sensor_dict = data.dict()
         sensor_dict["sensor_id"] = sensor_key
 
@@ -68,6 +70,23 @@ class SensorService:
         sensor.moisture = data.moisture
         sensor.last_update = datetime.now(timezone.utc)
         
+        db.commit()
+        db.refresh(sensor)
+        return sensor
+
+    @classmethod
+    def update_sensor_config(cls, db: Session, config: SensorConfigUpdate) -> Optional[Sensor]:
+        """Updates moisture threshold and sampling sync interval parameters received from application settings."""
+        sensor = cls.get_sensor_by_id(db, config.sensor_id)
+        if not sensor:
+            return None
+
+        if config.moisture_threshold is not None:
+            sensor.moisture_threshold = config.moisture_threshold
+        if config.sync_interval_minutes is not None:
+            sensor.sync_interval_minutes = config.sync_interval_minutes
+
+        sensor.last_update = datetime.now(timezone.utc)
         db.commit()
         db.refresh(sensor)
         return sensor

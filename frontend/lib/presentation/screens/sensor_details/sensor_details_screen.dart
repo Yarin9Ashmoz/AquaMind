@@ -40,7 +40,7 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
       orElse: () => widget.sensor,
     );
 
-    final status = _getStatus(currentSensor.moisture);
+    final status = _getStatus(currentSensor.moisture ?? 0.0);
     final statusColor = _getStatusColor(status);
 
     return Scaffold(
@@ -51,7 +51,7 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
         centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.black87),
         title: Text(
-          currentSensor.name,
+          currentSensor.name ?? "Unnamed Sensor",
           style: const TextStyle(
             color: Colors.black87,
             fontSize: 18,
@@ -64,7 +64,11 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
             onPressed: () => _showRenameDialog(context, state, currentSensor),
           ),
           IconButton(
-            icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 22),
+            icon: const Icon(
+              Icons.delete_outline_rounded,
+              color: Colors.redAccent,
+              size: 22,
+            ),
             onPressed: () => _confirmDelete(context, state, currentSensor),
           ),
         ],
@@ -98,17 +102,19 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
                         width: 160,
                         height: 160,
                         child: CircularProgressIndicator(
-                          value: currentSensor.moisture / 100,
+                          value: (currentSensor.moisture ?? 0) / 100,
                           strokeWidth: 10,
                           backgroundColor: Colors.grey[100],
-                          valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            statusColor,
+                          ),
                         ),
                       ),
                       Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            "${currentSensor.moisture.toStringAsFixed(0)}%",
+                            "${(currentSensor.moisture ?? 0.0).toStringAsFixed(0)}%",
                             style: const TextStyle(
                               fontSize: 38,
                               fontWeight: FontWeight.bold,
@@ -118,7 +124,10 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
                           ),
                           const SizedBox(height: 6),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: statusColor.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(12),
@@ -143,23 +152,33 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
                     width: double.infinity,
                     height: 52,
                     child: ElevatedButton.icon(
-                      onPressed: _isMeasuring ? null : () => _triggerMeasurement(state, currentSensor),
+                      onPressed: _isMeasuring
+                          ? null
+                          : () => _triggerMeasurement(state, currentSensor),
                       icon: _isMeasuring
                           ? const SizedBox(
                               width: 18,
                               height: 18,
-                              child: CupertinoActivityIndicator(radius: 9, color: Colors.white),
+                              child: CupertinoActivityIndicator(
+                                radius: 9,
+                                color: Colors.white,
+                              ),
                             )
                           : const Icon(CupertinoIcons.drop_fill, size: 18),
                       label: Text(
                         _isMeasuring ? "Sampling Telemetry..." : "Measure Now",
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue,
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
                     ),
                   ),
@@ -175,23 +194,52 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
                 padding: EdgeInsets.only(left: 4.0),
                 child: Text(
                   "Hardware Information",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 12),
 
-            _buildInfoCard("Device Status", state.statusText, Icons.bolt_rounded, Colors.amber[700]!),
-            _buildInfoCard("Plant Classification", currentSensor.plantType, Icons.grass_rounded, Colors.green[600]!),
-            _buildInfoCard("Deployment Zone", currentSensor.locationType, Icons.location_on_outlined, Colors.redAccent),
-            _buildInfoCard("Last Sync Timestamp", currentSensor.lastUpdate.toString().split('.').first, Icons.access_time_rounded, Colors.blueGrey),
+            _buildInfoCard(
+              "Device Status",
+              state.statusText ?? "Unknown",
+              Icons.bolt_rounded,
+              Colors.amber[700]!,
+            ),
+            _buildInfoCard(
+              "Plant Classification",
+              currentSensor.plantType ?? "Unspecified",
+              Icons.grass_rounded,
+              Colors.green[600]!,
+            ),
+            _buildInfoCard(
+              "Deployment Zone",
+              currentSensor.locationType ?? "N/A",
+              Icons.location_on_outlined,
+              Colors.redAccent,
+            ),
+            _buildInfoCard(
+              "Last Sync Timestamp",
+              currentSensor.lastUpdate?.toString().split('.').first ?? "Never",
+              Icons.access_time_rounded,
+              Colors.blueGrey,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInfoCard(String label, String value, IconData icon, Color iconColor) {
+  Widget _buildInfoCard(
+    String label,
+    String value,
+    IconData icon,
+    Color iconColor,
+  ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -203,21 +251,34 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
         leading: Icon(icon, color: iconColor, size: 22),
         title: Text(
           label,
-          style: TextStyle(fontSize: 13, color: Colors.grey[600], fontWeight: FontWeight.w500),
+          style: TextStyle(
+            fontSize: 13,
+            color: Colors.grey[600],
+            fontWeight: FontWeight.w500,
+          ),
         ),
         trailing: Text(
           value,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
         ),
       ),
     );
   }
 
   // Orchestrates the active live pulse requests with fallback timing constraints
-  Future<void> _triggerMeasurement(DashboardState state, Sensor currentSensor) async {
+  Future<void> _triggerMeasurement(
+    DashboardState state,
+    Sensor currentSensor,
+  ) async {
+    if (currentSensor.sensorId == null) return;
+
     setState(() => _isMeasuring = true);
     try {
-      await state.requestMeasurement(currentSensor.sensorId);
+      await state.requestMeasurement(currentSensor.sensorId!);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -257,13 +318,21 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
     }
   }
 
-  Future<void> _confirmDelete(BuildContext context, DashboardState state, Sensor currentSensor) async {
+  Future<void> _confirmDelete(
+    BuildContext context,
+    DashboardState state,
+    Sensor currentSensor,
+  ) async {
+    if (currentSensor.sensorId == null) return;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Delete Sensor'),
-        content: const Text('Are you sure you want to delete this sensor? This action cannot be undone.'),
+        content: const Text(
+          'Are you sure you want to delete this sensor? This action cannot be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -274,7 +343,9 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
               backgroundColor: Colors.redAccent,
               foregroundColor: Colors.white,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Delete'),
@@ -284,26 +355,34 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
     );
 
     if (confirmed ?? false) {
-      await state.deleteSensorById(currentSensor.sensorId);
+      await state.deleteSensorById(currentSensor.sensorId!);
       if (context.mounted) Navigator.pop(context);
     }
   }
 
-  void _showRenameDialog(BuildContext context, DashboardState state, Sensor sensor) {
-    _renameController.text = sensor.name;
+  void _showRenameDialog(
+    BuildContext context,
+    DashboardState state,
+    Sensor sensor,
+  ) {
+    _renameController.text = sensor.name ?? "";
 
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           title: const Text("Rename Sensor"),
           content: TextField(
             controller: _renameController,
             autofocus: true,
             decoration: InputDecoration(
               labelText: "Sensor Asset Name",
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           ),
           actions: [
@@ -313,12 +392,19 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
             ),
             TextButton(
               onPressed: () {
-                if (_renameController.text.trim().isNotEmpty) {
-                  state.renameSensor(sensor.sensorId, _renameController.text.trim());
+                if (_renameController.text.trim().isNotEmpty &&
+                    sensor.sensorId != null) {
+                  state.renameSensor(
+                    sensor.sensorId!,
+                    _renameController.text.trim(),
+                  );
                 }
                 Navigator.pop(context);
               },
-              child: const Text("Save", style: TextStyle(fontWeight: FontWeight.bold)),
+              child: const Text(
+                "Save",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         );
