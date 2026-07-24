@@ -205,7 +205,7 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
             const SizedBox(height: 12),
 
             _buildInfoCard(
-              "Status",
+              "Status\u00A0",
               state.statusText ?? "Unknown",
               Icons.bolt_rounded,
               Colors.amber[700]!,
