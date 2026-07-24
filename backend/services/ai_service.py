@@ -60,7 +60,7 @@ def analyze_plant_image(image_bytes: bytes) -> dict:
     try:
         # שימוש במודל נתמך והגדרת פלט JSON מובנה
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-2.0-flash",
             contents=[
                 prompt,
                 image_part
