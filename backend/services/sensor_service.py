@@ -41,7 +41,7 @@ class SensorService:
                 existing_sensor.moisture_threshold = data.moisture_threshold
             if data.sync_interval_minutes is not None:
                 existing_sensor.sync_interval_minutes = data.sync_interval_minutes
-            
+
             existing_sensor.last_update = datetime.now(timezone.utc)
             db.commit()
             db.refresh(existing_sensor)
@@ -62,14 +62,25 @@ class SensorService:
 
     @classmethod
     def update_moisture(cls, db: Session, data: SensorUpdate) -> Optional[Sensor]:
-        """Updates soil moisture metrics and refreshes operational timestamp."""
+        """Updates soil moisture metrics, tracks the dry-streak clock, and refreshes the timestamp."""
         sensor = cls.get_sensor_by_id(db, data.sensor_id)
         if not sensor:
             return None
 
+        now = datetime.now(timezone.utc)
+        was_dry = sensor.moisture is not None and sensor.moisture < sensor.moisture_threshold
+        is_dry = data.moisture < sensor.moisture_threshold
+
+        if is_dry and not was_dry:
+            # Just crossed below the threshold - start the dry-streak clock
+            sensor.dry_since = now
+        elif not is_dry:
+            # Recovered above threshold - reset the dry streak
+            sensor.dry_since = None
+
         sensor.moisture = data.moisture
-        sensor.last_update = datetime.now(timezone.utc)
-        
+        sensor.last_update = now
+
         db.commit()
         db.refresh(sensor)
         return sensor

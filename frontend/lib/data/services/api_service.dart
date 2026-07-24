@@ -10,14 +10,24 @@ class ApiService {
   // Use for production with the Render backend server.
   final String baseUrl = "https://aquamind-0xli.onrender.com";
 
-  // Increased to 90 seconds across the board to absorb Render's slow spin-up/cold start times safely.
+  // Must match the API_KEY value in backend/.env exactly.
+  static const String apiKey = "my7Super9Secret2Key_dont_share";
+
+  // Standard headers for protected (mutating) endpoints.
+  Map<String, String> get _authHeaders => {
+    "Content-Type": "application/json",
+    "X-API-Key": apiKey,
+  };
+
   final Duration timeout = const Duration(seconds: 90);
 
   Future<void> requestManualSample(String sensorId) async {
     try {
       String sensorIdForUrl = sensorId.replaceAll(":", "_");
-      final url = Uri.parse("$baseUrl/sensors/$sensorIdForUrl/request-manual");
-      final res = await http.post(url).timeout(timeout);
+      final url = Uri.parse(
+        "$baseUrl/api/v1/sensors/$sensorIdForUrl/request-manual",
+      );
+      final res = await http.post(url, headers: _authHeaders).timeout(timeout);
 
       if (res.statusCode != 200) {
         throw Exception("Failed to request manual sample: ${res.statusCode}");
@@ -30,7 +40,7 @@ class ApiService {
 
   Future<List<dynamic>> getSensors() async {
     try {
-      final url = Uri.parse("$baseUrl/sensors");
+      final url = Uri.parse("$baseUrl/api/v1/sensors/");
       final res = await http.get(url).timeout(timeout);
 
       if (res.statusCode != 200) {
@@ -50,13 +60,13 @@ class ApiService {
     required int syncInterval,
   }) async {
     try {
-      // Pass sensorId directly in the URL path
       final url = Uri.parse("$baseUrl/api/v1/sensors/config");
       final res = await http
           .patch(
             url,
-            headers: {"Content-Type": "application/json"},
+            headers: _authHeaders,
             body: jsonEncode({
+              "sensor_id": sensorId,
               "moisture_threshold": threshold,
               "sync_interval_minutes": syncInterval,
             }),
@@ -83,17 +93,16 @@ class ApiService {
     required int dryToleranceDays,
   }) async {
     try {
-      final url = Uri.parse("$baseUrl/sensors/create");
+      final url = Uri.parse("$baseUrl/api/v1/sensors/");
       final res = await http
           .post(
             url,
-            headers: {"Content-Type": "application/json"},
+            headers: _authHeaders,
             body: jsonEncode({
               "sensor_id": sensorId,
               "name": name,
               "plant_type": plantType,
               "location_type": locationType,
-              "moisture": moisture,
               "dry_tolerance_days": dryToleranceDays,
             }),
           )
@@ -111,13 +120,9 @@ class ApiService {
   Future<void> renameSensor(String sensorId, String newName) async {
     try {
       String sensorIdForUrl = sensorId.replaceAll(":", "_");
-      final url = Uri.parse("$baseUrl/sensors/$sensorIdForUrl/rename");
+      final url = Uri.parse("$baseUrl/api/v1/sensors/$sensorIdForUrl/rename");
       final res = await http
-          .post(
-            url,
-            headers: {"Content-Type": "application/json"},
-            body: jsonEncode({"name": newName}),
-          )
+          .post(url, headers: _authHeaders, body: jsonEncode({"name": newName}))
           .timeout(timeout);
 
       if (res.statusCode != 200) throw Exception("Failed to rename");
@@ -140,9 +145,11 @@ class ApiService {
       if (name != null) queryParams['name'] = name;
 
       final url = Uri.parse(
-        '$baseUrl/sensors/delete',
+        '$baseUrl/api/v1/sensors/',
       ).replace(queryParameters: queryParams);
-      final res = await http.delete(url).timeout(timeout);
+      final res = await http
+          .delete(url, headers: {"X-API-Key": apiKey})
+          .timeout(timeout);
 
       if (res.statusCode != 200) {
         throw Exception("Failed to delete sensor: ${res.statusCode}");
@@ -155,8 +162,10 @@ class ApiService {
 
   Future<void> deleteAllSensors() async {
     try {
-      final url = Uri.parse('$baseUrl/sensors/delete-all');
-      final res = await http.delete(url).timeout(timeout);
+      final url = Uri.parse('$baseUrl/api/v1/sensors/all');
+      final res = await http
+          .delete(url, headers: {"X-API-Key": apiKey})
+          .timeout(timeout);
 
       if (res.statusCode != 200) {
         throw Exception("Failed to delete all sensors: ${res.statusCode}");
@@ -168,27 +177,23 @@ class ApiService {
   }
 
   // ==========================================
-  // NEW: AI Plant Identification Function
+  // AI Plant Identification Function
   // ==========================================
 
-  /// Triggers the device camera to take a picture, uploads it to the Render backend,
-  /// and returns a Map containing Gemini-generated plant configurations in English.
   Future<Map<String, dynamic>?> identifyPlantWithAI() async {
     try {
       final ImagePicker picker = ImagePicker();
 
-      // 1. Open the native device camera to capture an image
       final XFile? image = await picker.pickImage(
         source: ImageSource.camera,
-        imageQuality: 80, // Compress slightly to optimize network upload speed
+        imageQuality: 80,
       );
 
-      // If the user backs out without snapping a picture, exit safely
       if (image == null) return null;
 
-      // 2. Prepare multipart request for file uploading
       final url = Uri.parse("$baseUrl/plants/identify");
       final request = http.MultipartRequest('POST', url);
+      request.headers["X-API-Key"] = apiKey;
 
       request.files.add(
         await http.MultipartFile.fromPath(
@@ -198,12 +203,10 @@ class ApiService {
         ),
       );
 
-      // 3. Dispatch the request with the updated 90-second timeout guard
       final streamedResponse = await request.send().timeout(timeout);
       final res = await http.Response.fromStream(streamedResponse);
 
       if (res.statusCode == 200) {
-        // Decode the clean, strict English JSON configuration received from the Gemini-powered backend
         return jsonDecode(res.body) as Map<String, dynamic>;
       } else {
         throw Exception(

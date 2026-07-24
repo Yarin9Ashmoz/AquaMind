@@ -17,6 +17,9 @@ class SensorUpdate(BaseModel):
     sensor_id: str
     moisture: float
 
+class SensorRename(BaseModel):
+    name: str
+
 class SensorConfigUpdate(BaseModel):
     sensor_id: str
     moisture_threshold: Optional[float] = None
@@ -27,6 +30,7 @@ class SensorResponse(SensorBase):
     moisture: float
     moisture_threshold: float
     sync_interval_minutes: int
+    dry_since: Optional[datetime] = None
     last_update: datetime
 
     class Config:
