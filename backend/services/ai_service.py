@@ -4,24 +4,21 @@ import traceback
 import importlib.metadata
 from google import genai
 from google.genai import types
-
+from google.genai.errors import ServerError
 
 print(
     "google-genai version:",
     importlib.metadata.version("google-genai")
 )
 
-
 API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not API_KEY:
     raise Exception("Missing GEMINI_API_KEY environment variable")
 
-
 client = genai.Client(
     api_key=API_KEY
 )
-
 
 print("=== Available Gemini models ===")
 try:
@@ -41,9 +38,7 @@ def analyze_plant_image(image_bytes: bytes) -> dict:
     prompt = """
     Analyze this plant image and provide configuration details for a smart irrigation system.
 
-    Return ONLY a valid JSON object.
-
-    Required JSON format:
+    Return ONLY a valid JSON object matching this schema:
 
     {
         "plant_name": "Common English name of the plant",
@@ -54,8 +49,6 @@ def analyze_plant_image(image_bytes: bytes) -> dict:
     }
 
     Rules:
-    - Return only JSON.
-    - Do not use markdown.
     - All text values must be in English.
     """
 
@@ -65,38 +58,33 @@ def analyze_plant_image(image_bytes: bytes) -> dict:
     )
 
     try:
-
+        # שימוש במודל נתמך והגדרת פלט JSON מובנה
         response = client.models.generate_content(
-            model="gemini-3.5-flash",
+            model="gemini-2.5-flash",
             contents=[
                 prompt,
                 image_part
-            ]
+            ],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json"
+            )
         )
-
 
         print("DEBUG Gemini response:")
         print(response.text)
 
-
         clean_text = response.text.strip()
-
-
-        if clean_text.startswith("```json"):
-            clean_text = clean_text.replace("```json", "", 1)
-
-        if clean_text.endswith("```"):
-            clean_text = clean_text[:-3]
-
-
-        clean_text = clean_text.strip()
-
-
         return json.loads(clean_text)
 
+    except ServerError as e:
+        print("⚠️ Gemini Server Error (503 / High demand or temporarily unavailable):")
+        traceback.print_exc()
+        return {
+            "error": "Gemini service busy or temporarily unavailable",
+            "details": str(e)
+        }
 
     except Exception as e:
-
         print("❌ ERROR inside analyze_plant_image:")
         traceback.print_exc()
 
