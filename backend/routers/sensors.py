@@ -14,6 +14,7 @@ from services.sensor_service import SensorService
 from services.alert_service import AlertService
 from services.notification_service import NotificationService
 from security import verify_api_key
+from services.device_token_service import DeviceTokenService
 
 router = APIRouter(prefix="/api/v1/sensors", tags=["Sensors"])
 
@@ -68,7 +69,8 @@ def receive_telemetry(data: SensorUpdate, db: Session = Depends(get_db)):
         dry_tolerance_days=sensor.dry_tolerance_days or 3,
     )
     if alert:
-        NotificationService.send_alert_notification(alert)
+            tokens = DeviceTokenService.get_all_tokens(db)
+            NotificationService.send_alert_notification(alert, tokens)
 
     return sensor
 

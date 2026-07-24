@@ -5,10 +5,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 1. IMPORTANT: Import all models here so SQLAlchemy detects them
-from models.sensor import Sensor 
+from models.sensor import Sensor
+from models.device_token import DeviceToken
 
 # Import routers
-from routers import sensors, plant
+from routers import sensors, plant, devices
 
 # 2. Create tables in the database (if they don't exist)
 try:
@@ -35,6 +36,7 @@ app.add_middleware(
 # 4. Include routers
 app.include_router(sensors.router)
 app.include_router(plant.router)
+app.include_router(devices.router)
 
 # 5. Root endpoint for health check
 @app.get("/")

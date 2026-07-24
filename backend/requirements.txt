@@ -6,3 +6,4 @@ python-multipart
 google-genai>=1.0.0
 pydantic
 python-dotenv
+firebase-admin
