@@ -87,16 +87,26 @@ class DashboardState extends ChangeNotifier {
 
   /// Requests the remote ESP32 unit to execute an instantaneous analog moisture measurement
   Future<void> requestMeasurement(String sensorId) async {
+    if (isActionLoading) return;
     try {
       error = null;
-      // Triggers manual polling downstream via backend router
+      isActionLoading = true;
+      notifyListeners();
+
       await repo.requestManualSample(sensorId);
-      print("📡 Telemetry operational command transmitted: $sensorId");
+      print("📡 Measurement request transmitted: $sensorId");
+
+      await Future.delayed(const Duration(seconds: 3));
+
+      await loadSensors();
     } catch (e) {
       error = "Hardware polling request failed. Node may be offline.";
       print("❌ Error requesting measurement: $e");
       notifyListeners();
       rethrow;
+    } finally {
+      isActionLoading = false;
+      notifyListeners();
     }
   }
 

@@ -16,7 +16,6 @@ class _SensorsScreenState extends State<SensorsScreen> {
   @override
   void initState() {
     super.initState();
-    // Safely fire async infrastructure fetch after initial component layout mount
     Future.microtask(() {
       if (mounted) {
         context.read<DashboardState>().loadSensors();
@@ -51,14 +50,18 @@ class _SensorsScreenState extends State<SensorsScreen> {
           ? _buildEmptyState()
           : _buildSensorList(state),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'sensors_screen_fab',
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
         elevation: 4,
-        onPressed: () {
-          Navigator.push(
+        onPressed: () async {
+          await Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const AddSensorBluetoothScreen()),
           );
+          if (context.mounted) {
+            context.read<DashboardState>().loadSensors();
+          }
         },
         child: const Icon(Icons.add, size: 26),
       ),
@@ -142,7 +145,6 @@ class _SensorsScreenState extends State<SensorsScreen> {
         itemBuilder: (context, i) {
           final s = state.sensors[i];
 
-          // Dynamic colors mapped directly against hardware telemetry
           final Color moistureColor = (s.moisture ?? 0) < 30.0
               ? Colors.orange
               : Colors.blue;
@@ -230,13 +232,16 @@ class _SensorsScreenState extends State<SensorsScreen> {
                       Icon(Icons.chevron_right, color: Colors.grey[400]),
                     ],
                   ),
-                  onTap: () {
-                    Navigator.push(
+                  onTap: () async {
+                    await Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => SensorDetailsScreen(sensor: s),
                       ),
                     );
+                    if (context.mounted) {
+                      context.read<DashboardState>().loadSensors();
+                    }
                   },
                 ),
               ),
@@ -247,7 +252,6 @@ class _SensorsScreenState extends State<SensorsScreen> {
     );
   }
 
-  // Launches clean confirmation block prior to invoking data mutations
   Future<bool> _confirmDeleteDialog(
     BuildContext context,
     dynamic sensor,
@@ -297,7 +301,6 @@ class _SensorsScreenState extends State<SensorsScreen> {
     return confirmed ?? false;
   }
 
-  // Inline model to inject target label mutations smoothly
   void _showRenameDialog(BuildContext context, dynamic sensor) {
     final String currentName = sensor.name?.toString() ?? "";
     final String sensorId = sensor.sensorId?.toString() ?? "";

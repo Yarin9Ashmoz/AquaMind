@@ -166,7 +166,7 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
                             )
                           : const Icon(CupertinoIcons.drop_fill, size: 18),
                       label: Text(
-                        _isMeasuring ? "Sampling Telemetry..." : "Measure Now",
+                        _isMeasuring ? "Measuring..." : "Measure Now",
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
@@ -205,7 +205,7 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
             const SizedBox(height: 12),
 
             _buildInfoCard(
-              "Device Status",
+              "Status",
               state.statusText ?? "Unknown",
               Icons.bolt_rounded,
               Colors.amber[700]!,

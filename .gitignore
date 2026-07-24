@@ -1,4 +1,15 @@
+# Environment & Secrets (CRITICAL)
+.env
+*.env
+backend/.env
+frontend/.env
+**/google-services.json
+**/GoogleService-Info.plist
+
 # Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
 frontend/.dart_tool/
 frontend/.packages
 frontend/.pub-cache/
@@ -49,6 +60,8 @@ backend/.ruff_cache/
 # Python virtual env
 venv/
 env/
+backend/venv/
+backend/env/
 
 # Logs
 *.log
