@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../state/dashboard_state.dart';
 import '../sensor_details/sensor_details_screen.dart';
 import '../add_sensor/add_sensor_bluetooth_screen.dart';
+import 'dart:async';
 
 class SensorsScreen extends StatefulWidget {
   const SensorsScreen({super.key});
@@ -13,6 +14,8 @@ class SensorsScreen extends StatefulWidget {
 }
 
 class _SensorsScreenState extends State<SensorsScreen> {
+  Timer? _pollingTimer;
+
   @override
   void initState() {
     super.initState();
@@ -21,6 +24,18 @@ class _SensorsScreenState extends State<SensorsScreen> {
         context.read<DashboardState>().loadSensors();
       }
     });
+
+    _pollingTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      if (mounted) {
+        context.read<DashboardState>().loadSensors();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _pollingTimer?.cancel();
+    super.dispose();
   }
 
   @override

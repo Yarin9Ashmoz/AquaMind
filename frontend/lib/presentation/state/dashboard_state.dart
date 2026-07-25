@@ -22,9 +22,11 @@ class DashboardState extends ChangeNotifier {
     if (isLoading) return;
 
     try {
-      isLoading = true;
+      if (sensors.isEmpty) {
+        isLoading = true;
+        notifyListeners();
+      }
       error = null;
-      notifyListeners();
 
       final fetchedSensors = await repo.getSensors();
 
@@ -46,7 +48,9 @@ class DashboardState extends ChangeNotifier {
 
       error = null;
     } catch (e) {
-      error = "Sync Failure: Check your connection or cloud status.";
+      if (sensors.isEmpty) {
+        error = "Sync Failure: Check your connection or cloud status.";
+      }
       print("❌ Error loading sensors: $e");
     } finally {
       isLoading = false;
