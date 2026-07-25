@@ -22,6 +22,11 @@ class AlertService:
 
         days_dry = 0.0
         if dry_since:
+            now = datetime.now(timezone.utc)
+            
+            if dry_since.tzinfo is None:
+                now = now.replace(tzinfo=None)
+
             days_dry = (datetime.now(timezone.utc) - dry_since).total_seconds() / 86400
 
         is_overdue = days_dry >= dry_tolerance_days

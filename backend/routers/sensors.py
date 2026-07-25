@@ -69,9 +69,13 @@ def receive_telemetry(data: SensorUpdate, db: Session = Depends(get_db)):
         dry_tolerance_days=sensor.dry_tolerance_days or 3,
     )
     if alert:
-            tokens = DeviceTokenService.get_all_tokens(db)
-            NotificationService.send_alert_notification(alert, tokens)
-
+            try:
+                # Attempt to send push notification to all registered devices
+                tokens = DeviceTokenService.get_all_tokens(db)
+                NotificationService.send_alert_notification(alert, tokens)
+            except Exception as e:  
+                # Log the error and continue without crashing the endpoint
+                print(f"Error sending notification: {e}")
     return sensor
 
 
