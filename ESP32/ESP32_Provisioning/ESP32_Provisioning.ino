@@ -13,6 +13,9 @@ Preferences prefs;
 #define CHARACTERISTIC_UUID "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
 #define SENSOR_PIN 32
 
+// Must match the API_KEY value in backend/.env exactly.
+#define API_KEY "my7Super9Secret2Key_dont_share"
+
 BLEServer *pServer = NULL;
 
 bool startWifiSetup = false;
@@ -26,6 +29,7 @@ String savedSSID;
 String savedPassword;
 String savedPlantType;
 String savedLocationType;
+int savedDryToleranceDays = 3;
 
 // =====================
 // BLE STOP
@@ -52,18 +56,14 @@ void sendMeasurement()
     return;
   }
 
-  // 📊 קריאה מרובה של הסנסור להערכה טובה יותר
   int sum = 0;
   for (int i = 0; i < 5; i++)
   {
     sum += analogRead(SENSOR_PIN);
     delay(50);
   }
-  int rawValue = sum / 5; // ממוצע של 5 קריאות
+  int rawValue = sum / 5;
 
-  // ✅ חישוב לחות מתוקן - בדוק אם הערכים נכונים
-  // אם 4095 = יבש ו-800 = רטוב, זה נכון
-  // אם ההפך, החלף את הערכים ל: map(rawValue, 800, 4095, 0, 100)
   int moisturePercent = map(rawValue, 4095, 800, 0, 100);
   moisturePercent = constrain(moisturePercent, 0, 100);
 
@@ -71,19 +71,20 @@ void sendMeasurement()
 
   WiFiClientSecure client;
   client.setInsecure();
-  client.setTimeout(10000); // 10 שניות timeout
+  client.setTimeout(10000);
 
   HTTPClient http;
 
-  String url = "https://aquamind-0xli.onrender.com/sensors/update";
+  // FIXED: correct route under the /api/v1 prefix
+  String url = "https://aquamind-0xli.onrender.com/api/v1/sensors/telemetry";
 
   if (http.begin(client, url))
   {
-
     http.addHeader("Content-Type", "application/json");
+    // NOTE: telemetry endpoint is intentionally left open (no API key) on the backend,
+    // since it's called directly by hardware like this.
 
     StaticJsonDocument<128> doc;
-    // החלף קולונים ב-underscores בשביל sensor_id
     String macAddress = WiFi.macAddress();
     macAddress.replace(":", "_");
     doc["sensor_id"] = macAddress;
@@ -113,7 +114,7 @@ void sendMeasurement()
 }
 
 // =====================
-// NEW: CHECK SERVER COMMAND
+// CHECK SERVER COMMAND
 // =====================
 void checkRemoteCommand()
 {
@@ -125,25 +126,23 @@ void checkRemoteCommand()
 
   WiFiClientSecure client;
   client.setInsecure();
-  client.setTimeout(10000); // 10 שניות timeout
+  client.setTimeout(10000);
 
   HTTPClient http;
 
   String macAddress = WiFi.macAddress();
-  // החלף קולונים ב-קו תחתון כדי לשלוח את זה כ-URL parameter
   macAddress.replace(":", "_");
 
-  String url = "https://aquamind-0xli.onrender.com/sensors/command/";
+  // FIXED: correct route under the /api/v1 prefix
+  String url = "https://aquamind-0xli.onrender.com/api/v1/sensors/command/";
   url += macAddress;
 
   if (http.begin(client, url))
   {
-
     int code = http.GET();
 
     if (code == 200)
     {
-
       String payload = http.getString();
       Serial.printf("📥 Server response: %s\n", payload.c_str());
 
@@ -156,7 +155,6 @@ void checkRemoteCommand()
       }
       else
       {
-        // ✅ תיקון: השתמש ב-.as<bool>() במקום |
         bool measure = doc["measure"].as<bool>();
 
         if (measure)
@@ -209,7 +207,6 @@ class WriteCallback : public BLECharacteristicCallbacks
 
   void onWrite(BLECharacteristic *pChar) override
   {
-
     String value = pChar->getValue();
     if (value.length() == 0)
       return;
@@ -224,6 +221,9 @@ class WriteCallback : public BLECharacteristicCallbacks
     savedPassword = doc["password"] | "";
     savedPlantType = doc["plant_type"] | "pot";
     savedLocationType = doc["location_type"] | "indoor";
+    // FIXED: this was never being read before, so the app's dry-tolerance
+    // selection (or the AI-suggested value) was silently dropped.
+    savedDryToleranceDays = doc["dry_tolerance_days"] | 3;
 
     startWifiSetup = true;
   }
@@ -237,25 +237,27 @@ void registerSensor()
 
   WiFiClientSecure client;
   client.setInsecure();
-  client.setTimeout(10000); // 10 seconds timeout
+  client.setTimeout(10000);
 
   HTTPClient http;
 
-  if (http.begin(client, "https://aquamind-0xli.onrender.com/sensors/create"))
+  // FIXED: correct route under the /api/v1 prefix
+  if (http.begin(client, "https://aquamind-0xli.onrender.com/api/v1/sensors/"))
   {
-
     http.addHeader("Content-Type", "application/json");
+    // FIXED: this endpoint is now protected - must send the shared API key.
+    http.addHeader("X-API-Key", API_KEY);
 
     StaticJsonDocument<256> doc;
 
-    // שלח sensor_id עם underscores במקום underscores
     String macAddress = WiFi.macAddress();
     macAddress.replace(":", "_");
     doc["sensor_id"] = macAddress;
     doc["name"] = savedName;
     doc["plant_type"] = savedPlantType;
     doc["location_type"] = savedLocationType;
-    doc["moisture"] = 0;
+    // FIXED: now actually forwarding the value the user/AI chose in the app.
+    doc["dry_tolerance_days"] = savedDryToleranceDays;
 
     String body;
     serializeJson(doc, body);
@@ -308,7 +310,6 @@ void handleWifiSetup()
 
   if (WiFi.status() == WL_CONNECTED)
   {
-
     Serial.println("✅ WiFi Connected");
 
     prefs.begin("sensor", false);
@@ -376,8 +377,6 @@ void loop()
 
   if (WiFi.status() == WL_CONNECTED)
   {
-
-    // 🌱 שלח מדידה כל 60 שניות
     if (millis() - lastUpdate > 60000)
     {
       lastUpdate = millis();
@@ -385,7 +384,6 @@ void loop()
       sendMeasurement();
     }
 
-    //  בדוק פקודות מהשרת כל 2 שניות
     if (millis() - lastCommandCheck > 2000)
     {
       lastCommandCheck = millis();
@@ -395,11 +393,10 @@ void loop()
   }
   else
   {
-    // חיכה קצת לפני הנסיון חוזר
     delay(1000);
     WiFi.reconnect();
     Serial.println("⚠️  WiFi disconnected, retrying...");
   }
 
-  delay(100); // תן ל-other tasks להשתנות
+  delay(100);
 }
