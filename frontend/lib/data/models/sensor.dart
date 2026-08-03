@@ -3,10 +3,10 @@ class Sensor {
   final String? name;
   final String? plantType;
   final String? locationType;
-  final int? dryToleranceDays;
+  final int dryToleranceDays;
   final double moisture;
-  final double? moistureThreshold;
-  final int? syncIntervalMinutes;
+  final double moistureThreshold;
+  final int syncIntervalMinutes;
   final DateTime? lastUpdate;
 
   Sensor({
@@ -27,7 +27,7 @@ class Sensor {
       name: json['name'],
       plantType: json['plant_type'],
       locationType: json['location_type'],
-      dryToleranceDays: json['dry_tolerance_days'],
+      dryToleranceDays: json['dry_tolerance_days'] ?? 3,
       moisture: (json['moisture'] as num?)?.toDouble() ?? 0.0,
       moistureThreshold:
           (json['moisture_threshold'] as num?)?.toDouble() ?? 25.0,

@@ -67,6 +67,7 @@ def receive_telemetry(data: SensorUpdate, db: Session = Depends(get_db)):
         threshold=sensor.moisture_threshold,
         dry_since=sensor.dry_since,
         dry_tolerance_days=sensor.dry_tolerance_days or 3,
+        location_type=sensor.location_type,
     )
     if alert:
             try:
