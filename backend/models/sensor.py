@@ -11,6 +11,10 @@ class Sensor(Base):
     location_type = Column(String, nullable=True)
     dry_tolerance_days = Column(Integer, nullable=True, default=3)
 
+    # 📍 Geographic Location Coordinates (Default: Tel Aviv coordinates)
+    latitude = Column(Float, nullable=True, default=32.0853)
+    longitude = Column(Float, nullable=True, default=34.7818)
+
     # Telemetry parameters
     moisture = Column(Float, nullable=True, default=0.0)
 

@@ -41,12 +41,19 @@ class SensorService:
                 existing_sensor.moisture_threshold = data.moisture_threshold
             if data.sync_interval_minutes is not None:
                 existing_sensor.sync_interval_minutes = data.sync_interval_minutes
+            
+            # 📍 עדכון קואורדינטות ה-GPS אם הן נשלחו
+            if data.latitude is not None:
+                existing_sensor.latitude = data.latitude
+            if data.longitude is not None:
+                existing_sensor.longitude = data.longitude
 
             existing_sensor.last_update = datetime.now(timezone.utc)
             db.commit()
             db.refresh(existing_sensor)
             return existing_sensor
 
+        # Pydantic v2: use data.model_dump() | Pydantic v1: use data.dict()
         sensor_dict = data.dict()
         sensor_dict["sensor_id"] = sensor_key
 

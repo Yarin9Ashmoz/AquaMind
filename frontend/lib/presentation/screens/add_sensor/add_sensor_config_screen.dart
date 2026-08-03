@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:geolocator/geolocator.dart';
 import 'add_sensor_wifi_screen.dart';
 import '../../../data/services/api_service.dart';
 
@@ -28,6 +29,7 @@ class _AddSensorConfigScreenState extends State<AddSensorConfigScreen> {
   String? _aiPlantInfo;
   String? _aiLightRequirement;
   bool _isLoadingAi = false;
+  bool _isGettingLocation = false;
 
   @override
   void initState() {
@@ -42,10 +44,69 @@ class _AddSensorConfigScreenState extends State<AddSensorConfigScreen> {
     super.dispose();
   }
 
+  /// Fetches current GPS coordinates via Geolocator for dynamic weather processing
+  Future<Position?> _getCurrentLocation() async {
+    setState(() => _isGettingLocation = true);
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Location services are disabled on your device."),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return null;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  "Location permissions are required for outdoor sensors.",
+                ),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          return null;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Location permissions are permanently denied."),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+        return null;
+      }
+
+      return await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.low,
+      );
+    } catch (e) {
+      debugPrint("❌ GPS Fetching Error: $e");
+      return null;
+    } finally {
+      if (mounted) {
+        setState(() => _isGettingLocation = false);
+      }
+    }
+  }
+
   /// Triggers the device camera via ApiService, submits the picture to Gemini,
   /// and auto-fills the screen's interactive form controls with the response payload.
   void _onScanWithAiPressed() async {
-    // Intercepts concurrent triggers to safeguard remote API usage and boundaries
     if (_isLoadingAi) return;
 
     setState(() {
@@ -55,7 +116,6 @@ class _AddSensorConfigScreenState extends State<AddSensorConfigScreen> {
     try {
       final result = await _apiService.identifyPlantWithAI();
 
-      // Gracefully reset execution threads if external process steps out or errors
       if (result == null) {
         if (mounted) setState(() => _isLoadingAi = false);
         return;
@@ -66,7 +126,6 @@ class _AddSensorConfigScreenState extends State<AddSensorConfigScreen> {
       final String? shortInfo = result['short_info'];
       final String? lightReq = result['light_requirement'];
 
-      // Clamp target days to safe bounds supported by dropdown configurations
       int clampedDays = suggestedDays;
       if (clampedDays < 0) clampedDays = 0;
       if (clampedDays > 14) clampedDays = 14;
@@ -103,6 +162,49 @@ class _AddSensorConfigScreenState extends State<AddSensorConfigScreen> {
         );
       }
     }
+  }
+
+  /// Validates input, captures GPS location if outdoor, and navigates to WiFi provisioning
+  void _onContinuePressed() async {
+    if (_controller.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Please assign a valid label to this sensor asset"),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    double? latitude;
+    double? longitude;
+
+    // Fetch GPS coordinates only if the deployment environment is set to Outdoor
+    if (locationType == "outdoor") {
+      final Position? pos = await _getCurrentLocation();
+      if (pos != null) {
+        latitude = pos.latitude;
+        longitude = pos.longitude;
+        debugPrint("📍 Captured Location: Lat $latitude, Lon $longitude");
+      }
+    }
+
+    if (!mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddSensorWifiScreen(
+          device: widget.device,
+          sensorName: _controller.text.trim(),
+          plantType: plantType,
+          locationType: locationType,
+          dryToleranceDays: dryToleranceDays,
+          latitude: latitude,
+          longitude: longitude,
+        ),
+      ),
+    );
   }
 
   @override
@@ -396,32 +498,9 @@ class _AddSensorConfigScreenState extends State<AddSensorConfigScreen> {
                 width: double.infinity,
                 height: 54,
                 child: ElevatedButton(
-                  onPressed: () {
-                    if (_controller.text.trim().isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            "Please assign a valid label to this sensor asset",
-                          ),
-                          backgroundColor: Colors.orange,
-                        ),
-                      );
-                      return;
-                    }
-
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => AddSensorWifiScreen(
-                          device: widget.device,
-                          sensorName: _controller.text.trim(),
-                          plantType: plantType,
-                          locationType: locationType,
-                          dryToleranceDays: dryToleranceDays,
-                        ),
-                      ),
-                    );
-                  },
+                  onPressed: (_isLoadingAi || _isGettingLocation)
+                      ? null
+                      : _onContinuePressed,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue,
                     foregroundColor: Colors.white,
@@ -430,10 +509,35 @@ class _AddSensorConfigScreenState extends State<AddSensorConfigScreen> {
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
-                  child: const Text(
-                    "Continue to WiFi Provisioning",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
+                  child: _isGettingLocation
+                      ? const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Text(
+                              "Acquiring GPS Location...",
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        )
+                      : const Text(
+                          "Continue to WiFi Provisioning",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                 ),
               ),
             ],

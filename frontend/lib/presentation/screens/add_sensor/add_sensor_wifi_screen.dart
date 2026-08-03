@@ -15,6 +15,8 @@ class AddSensorWifiScreen extends StatefulWidget {
   final String plantType;
   final String locationType;
   final int dryToleranceDays;
+  final double? latitude;
+  final double? longitude;
 
   const AddSensorWifiScreen({
     super.key,
@@ -23,6 +25,8 @@ class AddSensorWifiScreen extends StatefulWidget {
     required this.plantType,
     required this.locationType,
     required this.dryToleranceDays,
+    this.latitude,
+    this.longitude,
   });
 
   @override
@@ -111,13 +115,15 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
         loadingStatusText = "Provisioning network credentials over BLE...";
       });
 
-      // 2. Wrap properties into uniform target payload package
+      // 2. Wrap properties into uniform target payload package (including GPS coordinates)
       final payload = {
         "sensor_id": widget.device.remoteId.toString(),
         "name": widget.sensorName,
         "plant_type": widget.plantType,
         "location_type": widget.locationType,
         "dry_tolerance_days": widget.dryToleranceDays,
+        "latitude": widget.latitude,
+        "longitude": widget.longitude,
         "ssid": ssid,
         "password": password,
       };

@@ -7,6 +7,9 @@ class SensorBase(BaseModel):
     plant_type: Optional[str] = None
     location_type: Optional[str] = None
     dry_tolerance_days: Optional[int] = 3
+    # 📍 Geographic location coordinates with Tel Aviv defaults
+    latitude: Optional[float] = 32.0853
+    longitude: Optional[float] = 34.7818
 
 class SensorCreate(SensorBase):
     sensor_id: str
@@ -32,6 +35,9 @@ class SensorResponse(SensorBase):
     sync_interval_minutes: int
     dry_since: Optional[datetime] = None
     last_update: datetime
+    # 📍 Included in response payload
+    latitude: Optional[float] = 32.0853
+    longitude: Optional[float] = 34.7818
 
     class Config:
         from_attributes = True
