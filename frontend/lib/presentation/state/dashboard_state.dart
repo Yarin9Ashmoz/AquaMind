@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import '../../data/models/sensor.dart';
 import '../../data/repositories/sensor_repository.dart';
 
@@ -11,6 +13,12 @@ class DashboardState extends ChangeNotifier {
   bool isLoading = false; // Primary full-screen view state fetch manager
   bool isActionLoading = false; // Micro-interaction background loading toggle
   String? error;
+
+  // 📍 Weather state properties
+  double? currentTemp;
+  double? windSpeed;
+  int? weatherCode;
+  String? locationName = "Local Climate";
 
   DashboardState(this.repo) {
     loadSensors();
@@ -30,7 +38,7 @@ class DashboardState extends ChangeNotifier {
 
       final fetchedSensors = await repo.getSensors();
 
-      // DE-DUPLICATION: Safely filter out any duplicate IDs returned by faulty network cycles
+      // DE-DUPARATION: Safely filter out any duplicate IDs returned by faulty network cycles
       final seenIds = <String>{};
       sensors = fetchedSensors.where((s) => seenIds.add(s.sensorId)).toList();
 
@@ -46,6 +54,9 @@ class DashboardState extends ChangeNotifier {
         selectedSensor = sensors.first;
       }
 
+      // 📍 Fetch current weather telemetry alongside sensor data
+      await fetchWeatherData();
+
       error = null;
     } catch (e) {
       if (sensors.isEmpty) {
@@ -55,6 +66,47 @@ class DashboardState extends ChangeNotifier {
     } finally {
       isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// 📍 Fetches real-time weather telemetry from Open-Meteo API
+  Future<void> fetchWeatherData({
+    double lat = 32.0853,
+    double lon = 34.7818,
+  }) async {
+    try {
+      // Extract coordinates from active sensors if present
+      if (sensors.isNotEmpty) {
+        final validSensor = sensors.firstWhere(
+          (s) => s.latitude != null && s.longitude != null,
+          orElse: () => sensors.first,
+        );
+        if (validSensor.latitude != null && validSensor.longitude != null) {
+          lat = validSensor.latitude!;
+          lon = validSensor.longitude!;
+        }
+      }
+
+      final url = Uri.parse(
+        'https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current_weather=true',
+      );
+
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final currentWeather = data['current_weather'];
+
+        currentTemp = (currentWeather['temperature'] as num).toDouble();
+        windSpeed = (currentWeather['windspeed'] as num).toDouble();
+        weatherCode = (currentWeather['weathercode'] as num).toInt();
+      }
+    } catch (e) {
+      print("❌ Weather telemetry API fetch error: $e");
+      // Fallback defaults if offline
+      currentTemp ??= 24.5;
+      windSpeed ??= 12.0;
+      weatherCode ??= 0;
     }
   }
 
