@@ -56,7 +56,7 @@ async def receive_telemetry(data: SensorUpdate, db: Session = Depends(get_db)):
     if not sensor:
         raise HTTPException(status_code=404, detail="Sensor node not found")
 
-    # Clear pending manual trigger flag after successfully consuming measurement
+    # ✅ Clear pending manual trigger flag ONLY after telemetry is successfully received!
     sensor_key = SensorService._normalize_id(data.sensor_id)
     manual_requests[sensor_key] = False
 
@@ -96,11 +96,10 @@ def request_manual_measurement(sensor_id: str):
 def poll_hardware_command(sensor_id: str):
     """Endpoint polled by ESP hardware to inspect pending operational commands."""
     sensor_key = SensorService._normalize_id(sensor_id)
+    
+    # ✅ Read value WITHOUT clearing it here. 
+    # It will stay True until the ESP32 posts its new telemetry back to /telemetry!
     value = manual_requests.get(sensor_key, False)
-
-    # Consume single-shot command execution flag
-    if value:
-        manual_requests[sensor_key] = False
 
     return {"measure": value}
 
