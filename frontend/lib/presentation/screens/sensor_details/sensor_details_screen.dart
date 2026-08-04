@@ -277,20 +277,58 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
     if (currentSensor.sensorId == null) return;
 
     setState(() => _isMeasuring = true);
+
     try {
+      final DateTime? previousUpdate = currentSensor.lastUpdate;
+
       await state.requestMeasurement(currentSensor.sensorId!);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("✅ Measurement requested - waiting for data..."),
+            content: Text("📡 Measurement requested - waiting for ESP32..."),
             duration: Duration(seconds: 2),
           ),
         );
       }
 
-      await Future.delayed(const Duration(seconds: 1));
-      await state.fetchSensors();
+      bool updated = false;
+      const int maxRetries = 12;
+
+      for (int i = 0; i < maxRetries; i++) {
+        await Future.delayed(const Duration(seconds: 1));
+        await state.fetchSensors();
+
+        final updatedSensor = state.sensors.firstWhere(
+          (s) => s.sensorId == currentSensor.sensorId,
+          orElse: () => currentSensor,
+        );
+
+        if (updatedSensor.lastUpdate != previousUpdate) {
+          updated = true;
+          break;
+        }
+      }
+
+      if (mounted) {
+        if (updated) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("✅ New measurement received!"),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("⚠️ Timeout waiting for sensor response."),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
     } on TimeoutException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -314,7 +352,9 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
       }
       print("❌ Error requesting measurement: $e");
     } finally {
-      if (mounted) setState(() => _isMeasuring = false);
+      if (mounted) {
+        setState(() => _isMeasuring = false);
+      }
     }
   }
 
