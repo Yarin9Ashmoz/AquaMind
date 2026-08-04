@@ -22,7 +22,7 @@ class AlertService:
 
         # Dynamic adjustments for outdoor plants using real-time weather
         if location_type and location_type.lower() == "outdoor":
-            weather = WeatherService.get_outdoor_weather()
+            weather = WeatherService.get_current_weather()
             if weather:
                 temp = weather.get("temperature", 25.0)
                 humidity = weather.get("humidity", 50.0)
