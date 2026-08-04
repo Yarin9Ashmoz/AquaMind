@@ -50,7 +50,7 @@ def register_or_update_sensor(data: SensorCreate, db: Session = Depends(get_db))
 # ---------------------------
 # NOTE: left open (no API key) since this is called directly by the ESP32 hardware.
 @router.post("/telemetry", response_model=SensorResponse)
-def receive_telemetry(data: SensorUpdate, db: Session = Depends(get_db)):
+async def receive_telemetry(data: SensorUpdate, db: Session = Depends(get_db)):
     """Processes incoming moisture telemetry from hardware nodes and checks alert thresholds."""
     sensor = SensorService.update_moisture(db, data)
     if not sensor:
@@ -61,7 +61,7 @@ def receive_telemetry(data: SensorUpdate, db: Session = Depends(get_db)):
     manual_requests[sensor_key] = False
 
     # Evaluate alert state using custom moisture threshold + dry-tolerance settings
-    alert = AlertService.evaluate_sensor_data(
+    alert = await AlertService.evaluate_sensor_data(
         sensor_id=sensor.sensor_id,
         moisture=sensor.moisture,
         threshold=sensor.moisture_threshold,
@@ -70,13 +70,13 @@ def receive_telemetry(data: SensorUpdate, db: Session = Depends(get_db)):
         location_type=sensor.location_type,
     )
     if alert:
-            try:
-                # Attempt to send push notification to all registered devices
-                tokens = DeviceTokenService.get_all_tokens(db)
-                NotificationService.send_alert_notification(alert, tokens)
-            except Exception as e:  
-                # Log the error and continue without crashing the endpoint
-                print(f"Error sending notification: {e}")
+        try:
+            # Attempt to send push notification to all registered devices
+            tokens = DeviceTokenService.get_all_tokens(db)
+            NotificationService.send_alert_notification(alert, tokens)
+        except Exception as e:  
+            # Log the error and continue without crashing the endpoint
+            print(f"Error sending notification: {e}")
     return sensor
 
 

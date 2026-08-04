@@ -5,7 +5,7 @@ from services.weather_service import WeatherService
 class AlertService:
 
     @classmethod
-    def evaluate_sensor_data(
+    async def evaluate_sensor_data(
         cls,
         sensor_id: str,
         moisture: float,
@@ -22,7 +22,7 @@ class AlertService:
 
         # Dynamic adjustments for outdoor plants using real-time weather
         if location_type and location_type.lower() == "outdoor":
-            weather = WeatherService.get_current_weather()
+            weather = await WeatherService.get_current_weather()
             if weather:
                 temp = weather.get("temperature", 25.0)
                 humidity = weather.get("humidity", 50.0)
