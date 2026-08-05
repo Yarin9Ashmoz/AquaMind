@@ -25,20 +25,28 @@ class DashboardState extends ChangeNotifier {
   }
 
   /// Fetches the latest sensor configuration array from remote database
-  Future<void> loadSensors() async {
-    // Prevent overlapping synchronization pipelines
-    if (isLoading) return;
+  Future<void> loadSensors({bool force = false}) async {
+    // Prevent overlapping synchronization pipelines unless forced
+    if (isLoading && !force) return;
 
     try {
-      if (sensors.isEmpty) {
+      // Always trigger visual loader if list is currently empty or forced
+      if (sensors.isEmpty || force) {
         isLoading = true;
         notifyListeners();
       }
       error = null;
 
-      final fetchedSensors = await repo.getSensors();
+      // Timeout added to prevent infinite loading state if Render/Backend is slow
+      final fetchedSensors = await repo.getSensors().timeout(
+        const Duration(seconds: 12),
+        onTimeout: () {
+          print("⚠️ Network timeout fetching sensors from repository.");
+          return sensors; // Fallback to current memory cache
+        },
+      );
 
-      // DE-DUPARATION: Safely filter out any duplicate IDs returned by faulty network cycles
+      // DE-DUPLICATION: Safely filter out any duplicate IDs returned by faulty network cycles
       final seenIds = <String>{};
       sensors = fetchedSensors.where((s) => seenIds.add(s.sensorId)).toList();
 
@@ -64,26 +72,26 @@ class DashboardState extends ChangeNotifier {
       }
       print("❌ Error loading sensors: $e");
     } finally {
+      // Guarantees UI unblocking regardless of failure, timeout, or success
       isLoading = false;
       notifyListeners();
     }
   }
 
-  /// 📍 Fetches real-time weather telemetry from Open-Meteo API
+  /// 📍 Fetches real-time weather telemetry from Open-Meteo API safely
   Future<void> fetchWeatherData({
     double lat = 32.0853,
     double lon = 34.7818,
   }) async {
     try {
-      // Extract coordinates from active sensors if present
+      // Safe extraction of GPS coordinates without throwing StateError on empty list
       if (sensors.isNotEmpty) {
-        final validSensor = sensors.firstWhere(
+        final validSensors = sensors.where(
           (s) => s.latitude != null && s.longitude != null,
-          orElse: () => sensors.first,
         );
-        if (validSensor.latitude != null && validSensor.longitude != null) {
-          lat = validSensor.latitude!;
-          lon = validSensor.longitude!;
+        if (validSensors.isNotEmpty) {
+          lat = validSensors.first.latitude!;
+          lon = validSensors.first.longitude!;
         }
       }
 
@@ -91,7 +99,7 @@ class DashboardState extends ChangeNotifier {
         'https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current_weather=true',
       );
 
-      final response = await http.get(url);
+      final response = await http.get(url).timeout(const Duration(seconds: 6));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -129,7 +137,7 @@ class DashboardState extends ChangeNotifier {
       );
 
       // Refresh local sensor payload to reflect new configurations
-      await loadSensors();
+      await loadSensors(force: true);
     } catch (e) {
       error = "Failed to update sensor config: $e";
       print("❌ Error updating sensor config: $e");
@@ -154,7 +162,7 @@ class DashboardState extends ChangeNotifier {
 
       await Future.delayed(const Duration(seconds: 3));
 
-      await loadSensors();
+      await loadSensors(force: true);
     } catch (e) {
       error = "Hardware polling request failed. Node may be offline.";
       print("❌ Error requesting measurement: $e");
@@ -166,8 +174,8 @@ class DashboardState extends ChangeNotifier {
     }
   }
 
-  /// Alias for pull-to-refresh architecture components
-  Future<void> fetchSensors() => loadSensors();
+  /// Alias for pull-to-refresh architecture components (Forces dynamic refresh)
+  Future<void> fetchSensors() => loadSensors(force: true);
 
   /// Completely purges all structural nodes linked with the user profile
   Future<void> deleteAllSensors() async {
@@ -234,7 +242,7 @@ class DashboardState extends ChangeNotifier {
     try {
       error = null;
       await repo.renameSensor(sensorId, newName);
-      await loadSensors();
+      await loadSensors(force: true);
     } catch (e) {
       error = "Label modification dropped by server: $e";
       notifyListeners();
@@ -268,7 +276,7 @@ class DashboardState extends ChangeNotifier {
       );
 
       // Force high-priority clean sync immediately after successful pipeline creation
-      await loadSensors();
+      await loadSensors(force: true);
     } catch (e) {
       error = "Infrastructure asset registration failure: $e";
       print("❌ Error creating sensor: $e");

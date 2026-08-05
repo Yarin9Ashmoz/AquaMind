@@ -4,9 +4,7 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'package:provider/provider.dart';
 import 'package:wifi_iot/wifi_iot.dart';
-import '../../state/dashboard_state.dart';
 import 'add_sensor_success_screen.dart';
 
 class AddSensorWifiScreen extends StatefulWidget {
@@ -141,13 +139,9 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
 
       // 4. Terminate BLE interface and allow ESP32 standalone registration pipeline to settle
       await widget.device.disconnect();
-      await Future.delayed(const Duration(seconds: 4));
+      await Future.delayed(const Duration(seconds: 2));
 
-      // 5. Synchronize local state manager with centralized cloud telemetry storage
-      if (mounted) {
-        await context.read<DashboardState>().fetchSensors();
-      }
-
+      // 5. Navigate immediately to success screen (Don't hold BLE flow for HTTP fetch)
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,

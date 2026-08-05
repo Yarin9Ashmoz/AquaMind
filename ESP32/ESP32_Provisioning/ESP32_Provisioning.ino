@@ -20,9 +20,21 @@ BLEServer *pServer = NULL;
 
 bool startWifiSetup = false;
 bool bleStopped = false;
+bool wasConnected = false; // Tracks connection state transitions to avoid Serial spam
+
+// FIX: tracks whether a phone is actively connected over BLE. The ESP32 has a
+// single radio shared between WiFi and BLE. When a BLE central is connected
+// (e.g. the app is mid-way through connecting/negotiating MTU/writing
+// credentials), we pause outbound WiFi/HTTPS traffic so it doesn't starve the
+// BLE controller of radio time. Without this, periodic checkRemoteCommand()/
+// sendMeasurement() calls (which do TLS handshakes) can make requestMtu()
+// on the phone hang and time out, exactly like the "Timed out after 15s"
+// error from flutter_blue_plus.
+volatile bool bleClientConnected = false;
 
 unsigned long lastUpdate = 0;
 unsigned long lastCommandCheck = 0;
+unsigned long lastReconnectAttempt = 0;
 
 String savedName;
 String savedSSID;
@@ -49,10 +61,8 @@ void stopBLE()
 // =====================
 void sendMeasurement()
 {
-
   if (WiFi.status() != WL_CONNECTED)
   {
-    Serial.println("❌ WiFi not connected, skipping measurement");
     return;
   }
 
@@ -74,15 +84,11 @@ void sendMeasurement()
   client.setTimeout(10000);
 
   HTTPClient http;
-
-  // FIXED: correct route under the /api/v1 prefix
   String url = "https://aquamind-0xli.onrender.com/api/v1/sensors/telemetry";
 
   if (http.begin(client, url))
   {
     http.addHeader("Content-Type", "application/json");
-    // NOTE: telemetry endpoint is intentionally left open (no API key) on the backend,
-    // since it's called directly by hardware like this.
 
     StaticJsonDocument<128> doc;
     String macAddress = WiFi.macAddress();
@@ -92,7 +98,7 @@ void sendMeasurement()
 
     String body;
     serializeJson(doc, body);
-    Serial.printf("📤 Sending: %s\n", body.c_str());
+    Serial.printf("📤 Sending telemetry: %s\n", body.c_str());
 
     int httpCode = http.POST(body);
 
@@ -118,7 +124,6 @@ void sendMeasurement()
 // =====================
 void checkRemoteCommand()
 {
-
   if (WiFi.status() != WL_CONNECTED)
   {
     return;
@@ -133,9 +138,7 @@ void checkRemoteCommand()
   String macAddress = WiFi.macAddress();
   macAddress.replace(":", "_");
 
-  // FIXED: correct route under the /api/v1 prefix
-  String url = "https://aquamind-0xli.onrender.com/api/v1/sensors/command/";
-  url += macAddress;
+  String url = "https://aquamind-0xli.onrender.com/api/v1/sensors/command/" + macAddress;
 
   if (http.begin(client, url))
   {
@@ -144,8 +147,6 @@ void checkRemoteCommand()
     if (code == 200)
     {
       String payload = http.getString();
-      Serial.printf("📥 Server response: %s\n", payload.c_str());
-
       StaticJsonDocument<128> doc;
       DeserializationError error = deserializeJson(doc, payload);
 
@@ -156,7 +157,6 @@ void checkRemoteCommand()
       else
       {
         bool measure = doc["measure"].as<bool>();
-
         if (measure)
         {
           Serial.println("📡 Remote measurement triggered!");
@@ -164,16 +164,12 @@ void checkRemoteCommand()
         }
       }
     }
-    else
+    else if (code != 404)
     {
-      Serial.printf("❌ Server HTTP Error: %d\n", code);
+      Serial.printf("❌ Command check HTTP Error: %d\n", code);
     }
 
     http.end();
-  }
-  else
-  {
-    Serial.println("❌ Failed to connect to server for command check");
   }
 }
 
@@ -182,15 +178,19 @@ void checkRemoteCommand()
 // =====================
 class MyServerCallbacks : public BLEServerCallbacks
 {
-
   void onConnect(BLEServer *pServer)
   {
-    Serial.println("📱 Connected");
+    Serial.println("📱 Connected via BLE");
+    // FIX: pause background WiFi/HTTPS traffic for the duration of the BLE
+    // session so the radio is free for MTU negotiation / service discovery /
+    // the credentials write.
+    bleClientConnected = true;
   }
 
   void onDisconnect(BLEServer *pServer)
   {
-    Serial.println("📱 Disconnected");
+    Serial.println("📱 Disconnected from BLE");
+    bleClientConnected = false; // FIX: resume normal WiFi/HTTPS activity
 
     if (!startWifiSetup && WiFi.status() != WL_CONNECTED)
     {
@@ -204,7 +204,6 @@ class MyServerCallbacks : public BLEServerCallbacks
 // =====================
 class WriteCallback : public BLECharacteristicCallbacks
 {
-
   void onWrite(BLECharacteristic *pChar) override
   {
     String value = pChar->getValue();
@@ -221,8 +220,6 @@ class WriteCallback : public BLECharacteristicCallbacks
     savedPassword = doc["password"] | "";
     savedPlantType = doc["plant_type"] | "pot";
     savedLocationType = doc["location_type"] | "indoor";
-    // FIXED: this was never being read before, so the app's dry-tolerance
-    // selection (or the AI-suggested value) was silently dropped.
     savedDryToleranceDays = doc["dry_tolerance_days"] | 3;
 
     startWifiSetup = true;
@@ -234,18 +231,15 @@ class WriteCallback : public BLECharacteristicCallbacks
 // =====================
 void registerSensor()
 {
-
   WiFiClientSecure client;
   client.setInsecure();
   client.setTimeout(10000);
 
   HTTPClient http;
 
-  // FIXED: correct route under the /api/v1 prefix
   if (http.begin(client, "https://aquamind-0xli.onrender.com/api/v1/sensors/"))
   {
     http.addHeader("Content-Type", "application/json");
-    // FIXED: this endpoint is now protected - must send the shared API key.
     http.addHeader("X-API-Key", API_KEY);
 
     StaticJsonDocument<256> doc;
@@ -256,7 +250,6 @@ void registerSensor()
     doc["name"] = savedName;
     doc["plant_type"] = savedPlantType;
     doc["location_type"] = savedLocationType;
-    // FIXED: now actually forwarding the value the user/AI chose in the app.
     doc["dry_tolerance_days"] = savedDryToleranceDays;
 
     String body;
@@ -287,13 +280,13 @@ void registerSensor()
 // =====================
 void handleWifiSetup()
 {
-
-  Serial.println("⚙️ WiFi setup");
+  Serial.println("⚙️ Starting WiFi setup...");
 
   if (pServer)
     pServer->getAdvertising()->stop();
 
   stopBLE();
+  bleClientConnected = false; // FIX: BLE is fully torn down here, so this must be reset too
 
   WiFi.disconnect(true);
   delay(500);
@@ -310,7 +303,8 @@ void handleWifiSetup()
 
   if (WiFi.status() == WL_CONNECTED)
   {
-    Serial.println("✅ WiFi Connected");
+    Serial.println("✅ WiFi Connected!");
+    wasConnected = true;
 
     prefs.begin("sensor", false);
     prefs.putString("ssid", savedSSID);
@@ -320,6 +314,10 @@ void handleWifiSetup()
     registerSensor();
     sendMeasurement();
   }
+  else
+  {
+    Serial.println("❌ Failed to connect to target WiFi SSID");
+  }
 }
 
 // =====================
@@ -327,24 +325,24 @@ void handleWifiSetup()
 // =====================
 void setup()
 {
-
   Serial.begin(115200);
   analogReadResolution(12);
 
   prefs.begin("sensor", true);
-
   String ssid = prefs.getString("ssid", "");
   String pass = prefs.getString("password", "");
-
   prefs.end();
 
   if (ssid != "")
   {
+    savedSSID = ssid;
+    savedPassword = pass;
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid.c_str(), pass.c_str());
   }
 
   BLEDevice::init("AquaMind Sensor");
+  BLEDevice::setMTU(512);
 
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
@@ -360,7 +358,7 @@ void setup()
   service->start();
   BLEDevice::getAdvertising()->start();
 
-  Serial.println("📡 Ready");
+  Serial.println("📡 Ready for BLE connections");
 }
 
 // =====================
@@ -368,34 +366,59 @@ void setup()
 // =====================
 void loop()
 {
-
   if (startWifiSetup)
   {
     startWifiSetup = false;
     handleWifiSetup();
   }
 
+  // FIX: while a phone is connected over BLE, skip all WiFi/HTTPS activity
+  // below so the radio stays free for the BLE session (MTU negotiation,
+  // service discovery, credential write). Everything resumes automatically
+  // once onDisconnect() fires.
+  if (bleClientConnected)
+  {
+    delay(100);
+    return;
+  }
+
   if (WiFi.status() == WL_CONNECTED)
   {
+    wasConnected = true;
+
+    // Send periodic telemetry every 60 seconds
     if (millis() - lastUpdate > 60000)
     {
       lastUpdate = millis();
-      Serial.println("\n📡 Sending periodic measurement...");
       sendMeasurement();
     }
 
+    // Check for incoming remote commands every 2 seconds
     if (millis() - lastCommandCheck > 2000)
     {
       lastCommandCheck = millis();
-      Serial.println("\n🔍 Checking for remote commands...");
       checkRemoteCommand();
     }
   }
   else
   {
-    delay(1000);
-    WiFi.reconnect();
-    Serial.println("⚠️  WiFi disconnected, retrying...");
+    // Attempt reconnect quietly only if saved WiFi credentials exist
+    if (savedSSID.length() > 0)
+    {
+      // Print notification ONCE when connection drops
+      if (wasConnected)
+      {
+        wasConnected = false;
+        Serial.println("⚠️ WiFi connection lost. Reconnecting in background...");
+      }
+
+      // Retry connecting every 10 seconds in background without flooding Serial
+      if (millis() - lastReconnectAttempt > 10000)
+      {
+        lastReconnectAttempt = millis();
+        WiFi.reconnect();
+      }
+    }
   }
 
   delay(100);
