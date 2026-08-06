@@ -32,6 +32,10 @@ bool wasConnected = false; // Tracks connection state transitions to avoid Seria
 // error from flutter_blue_plus.
 volatile bool bleClientConnected = false;
 
+// FIX: tracks whether loop() paused an in-progress WiFi STA association for
+// the current BLE session, so it knows to resume it once the session ends.
+bool wifiPausedForBle = false;
+
 unsigned long lastUpdate = 0;
 unsigned long lastCommandCheck = 0;
 unsigned long lastReconnectAttempt = 0;
@@ -183,7 +187,13 @@ class MyServerCallbacks : public BLEServerCallbacks
     Serial.println("📱 Connected via BLE");
     // FIX: pause background WiFi/HTTPS traffic for the duration of the BLE
     // session so the radio is free for MTU negotiation / service discovery /
-    // the credentials write.
+    // the credentials write. NOTE: this callback runs on the BLE host
+    // stack's own task, not loop() — deliberately not touching WiFi here.
+    // Calling WiFi.disconnect() synchronously from this task blocked long
+    // enough (NVS/event-queue waits) to make the stack miss the MTU
+    // exchange's timing window, which caused the very timeout this is
+    // supposed to prevent. The actual WiFi pause/resume happens in loop(),
+    // see wifiPausedForBle below.
     bleClientConnected = true;
   }
 
@@ -287,6 +297,7 @@ void handleWifiSetup()
 
   stopBLE();
   bleClientConnected = false; // FIX: BLE is fully torn down here, so this must be reset too
+  wifiPausedForBle = false;   // about to WiFi.begin() with fresh credentials below anyway
 
   WiFi.disconnect(true);
   delay(500);
@@ -339,6 +350,11 @@ void setup()
     savedPassword = pass;
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid.c_str(), pass.c_str());
+    Serial.printf("📶 Found saved WiFi credentials for \"%s\" — auto-connecting in background\n", ssid.c_str());
+  }
+  else
+  {
+    Serial.println("📶 No saved WiFi credentials — skipping auto-connect");
   }
 
   BLEDevice::init("AquaMind Sensor");
@@ -378,8 +394,32 @@ void loop()
   // once onDisconnect() fires.
   if (bleClientConnected)
   {
+    // FIX: a WiFi STA association still in progress (e.g. the auto-reconnect
+    // kicked off from setup() using saved credentials) keeps using the radio
+    // even though loop() itself is paused, since that reconnect is driven by
+    // the ESP-IDF WiFi task, not our loop(). That contention was starving
+    // the BLE controller enough that the phone's MTU request timed out.
+    // Done here (main loop task), not in the BLE callback, since calling
+    // WiFi APIs directly from the BLE stack's own task blocked long enough
+    // to cause the very timeout this is meant to avoid.
+    if (!wifiPausedForBle && WiFi.status() != WL_CONNECTED)
+    {
+      WiFi.disconnect();
+      wifiPausedForBle = true;
+    }
     delay(100);
     return;
+  }
+
+  if (wifiPausedForBle)
+  {
+    // FIX: resume the WiFi connection we paused for the BLE session, unless
+    // we're about to (re)connect with fresh credentials anyway.
+    wifiPausedForBle = false;
+    if (!startWifiSetup && savedSSID.length() > 0)
+    {
+      WiFi.reconnect();
+    }
   }
 
   if (WiFi.status() == WL_CONNECTED)

@@ -64,6 +64,11 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
             onPressed: () => _showRenameDialog(context, state, currentSensor),
           ),
           IconButton(
+            icon: const Icon(Icons.tune_rounded, size: 22),
+            tooltip: "Edit plant configuration",
+            onPressed: () => _showEditConfigDialog(context, state, currentSensor),
+          ),
+          IconButton(
             icon: const Icon(
               Icons.delete_outline_rounded,
               color: Colors.redAccent,
@@ -215,12 +220,21 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
               currentSensor.plantType ?? "Unspecified",
               Icons.grass_rounded,
               Colors.green[600]!,
+              onTap: () => _showEditConfigDialog(context, state, currentSensor),
             ),
             _buildInfoCard(
               "Deployment Zone",
               currentSensor.locationType ?? "N/A",
               Icons.location_on_outlined,
               Colors.redAccent,
+              onTap: () => _showEditConfigDialog(context, state, currentSensor),
+            ),
+            _buildInfoCard(
+              "Dry Tolerance",
+              "${currentSensor.dryToleranceDays} days",
+              Icons.wb_sunny_outlined,
+              Colors.orange[700]!,
+              onTap: () => _showEditConfigDialog(context, state, currentSensor),
             ),
             _buildInfoCard(
               "Last Sync Timestamp",
@@ -238,8 +252,9 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
     String label,
     String value,
     IconData icon,
-    Color iconColor,
-  ) {
+    Color iconColor, {
+    VoidCallback? onTap,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -247,6 +262,7 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
         borderRadius: BorderRadius.circular(16),
       ),
       child: ListTile(
+        onTap: onTap,
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
         leading: Icon(icon, color: iconColor, size: 22),
         title: Text(
@@ -257,13 +273,22 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
             fontWeight: FontWeight.w500,
           ),
         ),
-        trailing: Text(
-          value,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Colors.black87,
-          ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+            if (onTap != null) ...[
+              const SizedBox(width: 6),
+              Icon(Icons.chevron_right_rounded, size: 18, color: Colors.grey[400]),
+            ],
+          ],
         ),
       ),
     );
@@ -447,6 +472,137 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
               ),
             ),
           ],
+        );
+      },
+    );
+  }
+
+  // Lets plant type, deployment zone, and dry tolerance be edited together in
+  // one place, since changing indoor/outdoor should prompt reconsidering the
+  // dry tolerance rather than silently carrying over a value picked for the
+  // old environment.
+  void _showEditConfigDialog(
+    BuildContext context,
+    DashboardState state,
+    Sensor sensor,
+  ) {
+    String plantType = sensor.plantType ?? "pot";
+    String locationType = sensor.locationType ?? "indoor";
+    int dryToleranceDays = sensor.dryToleranceDays;
+    bool isSaving = false;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text("Edit Plant Configuration"),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: plantType,
+                  decoration: InputDecoration(
+                    labelText: "Plant Type",
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: "pot", child: Text("Potted Plant")),
+                    DropdownMenuItem(value: "garden", child: Text("Open Garden")),
+                  ],
+                  onChanged: (v) => setDialogState(() => plantType = v!),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  initialValue: locationType,
+                  decoration: InputDecoration(
+                    labelText: "Deployment Environment",
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: "indoor", child: Text("Indoor Structure")),
+                    DropdownMenuItem(value: "outdoor", child: Text("Outdoor Field")),
+                  ],
+                  onChanged: (v) => setDialogState(() => locationType = v!),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<int>(
+                  initialValue: dryToleranceDays,
+                  decoration: InputDecoration(
+                    labelText: "Dry Tolerance Window",
+                    helperText:
+                        "Maximum continuous days allowed without water",
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  items: List.generate(15, (i) => i)
+                      .map(
+                        (v) => DropdownMenuItem(
+                          value: v,
+                          child: Text(v == 0 ? "No delay (Immediate Alert)" : "$v Days"),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) => setDialogState(() => dryToleranceDays = v!),
+                ),
+                if (locationType != (sensor.locationType ?? "indoor")) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    "You're changing the deployment zone — double check the dry "
+                    "tolerance above still makes sense for the new environment.",
+                    style: TextStyle(fontSize: 12, color: Colors.orange[800]),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSaving ? null : () => Navigator.pop(dialogContext),
+                child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+              ),
+              TextButton(
+                onPressed: isSaving
+                    ? null
+                    : () async {
+                        setDialogState(() => isSaving = true);
+                        try {
+                          await state.createSensor(
+                            sensorId: sensor.sensorId,
+                            name: sensor.name ?? "Sensor ${sensor.sensorId}",
+                            plantType: plantType,
+                            locationType: locationType,
+                            dryToleranceDays: dryToleranceDays,
+                            moisture: sensor.moisture,
+                          );
+                          if (dialogContext.mounted) Navigator.pop(dialogContext);
+                        } catch (e) {
+                          setDialogState(() => isSaving = false);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text("Failed to update configuration: $e"),
+                                backgroundColor: Colors.redAccent,
+                              ),
+                            );
+                          }
+                        }
+                      },
+                child: isSaving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text("Save", style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
         );
       },
     );

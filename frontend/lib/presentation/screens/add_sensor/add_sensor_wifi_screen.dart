@@ -4,7 +4,10 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:provider/provider.dart';
 import 'package:wifi_iot/wifi_iot.dart';
+import '../../state/dashboard_state.dart';
 import 'add_sensor_success_screen.dart';
 
 class AddSensorWifiScreen extends StatefulWidget {
@@ -48,6 +51,30 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
   // Scans for localized physical 2.4GHz infrastructure router bands
   Future<void> scanWifi() async {
     try {
+      // Android requires ACCESS_FINE_LOCATION to be granted at runtime before
+      // WifiManager will return any scan results, regardless of whether the
+      // config screen already asked for it (it only does for outdoor sensors).
+      if (Platform.isAndroid) {
+        LocationPermission permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
+        }
+        if (permission == LocationPermission.denied ||
+            permission == LocationPermission.deniedForever) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  "Location permission is required to scan for WiFi networks.",
+                ),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          return;
+        }
+      }
+
       List<WifiNetwork> result = await WiFiForIoTPlugin.loadWifiList();
       final uniqueMap = <String, WifiNetwork>{};
       for (var n in result) {
@@ -56,6 +83,14 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
       if (mounted) setState(() => networks = uniqueMap.values.toList());
     } catch (e) {
       print("❌ WiFi Transceiver Local Scan Error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Couldn't scan for WiFi networks: $e"),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
     }
   }
 
@@ -69,16 +104,35 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
     });
 
     try {
-      // 1. Proactively cycle connection states to bypass Android status-133 errors
-      try {
-        await widget.device.disconnect();
-        await Future.delayed(const Duration(milliseconds: 500));
-      } catch (_) {}
+      // 1. Establish the BLE connection, retrying a couple of times if the
+      // handshake times out. This is usually transient radio contention on
+      // the ESP32 (its WiFi and BLE share one radio) rather than a
+      // permanent failure, so a fresh disconnect/reconnect cycle tends to
+      // succeed once the contention clears.
+      const maxConnectAttempts = 3;
+      for (int attempt = 1; attempt <= maxConnectAttempts; attempt++) {
+        // Proactively cycle connection state to bypass Android status-133 errors
+        try {
+          await widget.device.disconnect();
+          await Future.delayed(const Duration(milliseconds: 500));
+        } catch (_) {}
 
-      await widget.device.connect(
-        timeout: const Duration(seconds: 15),
-        autoConnect: false,
-      );
+        setState(() {
+          loadingStatusText = attempt == 1
+              ? "Establishing BLE connection..."
+              : "Retrying BLE connection (attempt $attempt/$maxConnectAttempts)...";
+        });
+
+        try {
+          await widget.device.connect(
+            timeout: const Duration(seconds: 15),
+            autoConnect: false,
+          );
+          break;
+        } catch (e) {
+          if (attempt == maxConnectAttempts) rethrow;
+        }
+      }
 
       if (Platform.isAndroid) {
         setState(
@@ -132,16 +186,30 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
         withoutResponse: false,
       );
 
+      // 4. Terminate BLE interface so the ESP32 is free to join WiFi and register itself
+      await widget.device.disconnect();
+
       setState(() {
-        loadingStatusText =
-            "Awaiting hardware cluster network synchronization...";
+        loadingStatusText = "Waiting for hardware to come online...";
       });
 
-      // 4. Terminate BLE interface and allow ESP32 standalone registration pipeline to settle
-      await widget.device.disconnect();
-      await Future.delayed(const Duration(seconds: 2));
+      // 5. Poll the backend until the newly provisioned sensor shows up (the ESP32
+      // needs time to join WiFi and POST its registration) instead of assuming a
+      // fixed 2s delay is enough, which raced ahead of the hardware and made the
+      // sensor missing from the dashboard until the app was restarted.
+      if (mounted) {
+        final dashboardState = context.read<DashboardState>();
+        final deadline = DateTime.now().add(const Duration(seconds: 30));
+        while (mounted && DateTime.now().isBefore(deadline)) {
+          await dashboardState.loadSensors(force: true);
+          if (dashboardState.sensors.any((s) => s.name == widget.sensorName)) {
+            break;
+          }
+          await Future.delayed(const Duration(seconds: 2));
+        }
+      }
 
-      // 5. Navigate immediately to success screen (Don't hold BLE flow for HTTP fetch)
+      // 6. Navigate to success screen
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,
