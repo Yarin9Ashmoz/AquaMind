@@ -22,19 +22,27 @@ bool startWifiSetup = false;
 bool bleStopped = false;
 bool wasConnected = false; // Tracks connection state transitions to avoid Serial spam
 
-// FIX: tracks whether a phone is actively connected over BLE. The ESP32 has a
-// single radio shared between WiFi and BLE. When a BLE central is connected
-// (e.g. the app is mid-way through connecting/negotiating MTU/writing
-// credentials), we pause outbound WiFi/HTTPS traffic so it doesn't starve the
-// BLE controller of radio time. Without this, periodic checkRemoteCommand()/
-// sendMeasurement() calls (which do TLS handshakes) can make requestMtu()
-// on the phone hang and time out, exactly like the "Timed out after 15s"
-// error from flutter_blue_plus.
-volatile bool bleClientConnected = false;
+// Accumulates chunked BLE writes until a '\n' terminator is seen. The phone
+// splits large JSON payloads into MTU-sized pieces, so a single onWrite()
+// call only ever holds a fragment.
+String bleRxBuffer = "";
 
-// FIX: tracks whether loop() paused an in-progress WiFi STA association for
-// the current BLE session, so it knows to resume it once the session ends.
-bool wifiPausedForBle = false;
+// Restarting advertising is deferred to loop() (instead of calling it
+// straight from onDisconnect(), which runs on the BLE stack's own task) so
+// we can give the controller a brief settle window first. Restarting too
+// quickly right after a disconnect is a common cause of follow-on
+// GATT_CONN_TERMINATE_LOCAL_HOST (133) errors on the next connection.
+volatile bool needsAdvertisingRestart = false;
+unsigned long advertisingRestartAt = 0;
+
+// Tracks whether a phone is actively connected over BLE. Used only to skip
+// *starting new* blocking HTTP calls from loop() while a BLE session is in
+// progress — it does not touch the WiFi connection itself (an earlier
+// version called WiFi.disconnect()/reconnect() here, which caused more
+// problems than it solved). If a call was already in-flight when the BLE
+// central connected, it's left to finish on its own (bounded by its own
+// short timeout — see checkRemoteCommand/sendMeasurement).
+volatile bool bleClientConnected = false;
 
 unsigned long lastUpdate = 0;
 unsigned long lastCommandCheck = 0;
@@ -85,7 +93,7 @@ void sendMeasurement()
 
   WiFiClientSecure client;
   client.setInsecure();
-  client.setTimeout(10000);
+  client.setTimeout(5000);
 
   HTTPClient http;
   String url = "https://aquamind-0xli.onrender.com/api/v1/sensors/telemetry";
@@ -135,7 +143,7 @@ void checkRemoteCommand()
 
   WiFiClientSecure client;
   client.setInsecure();
-  client.setTimeout(10000);
+  client.setTimeout(3000);
 
   HTTPClient http;
 
@@ -185,26 +193,19 @@ class MyServerCallbacks : public BLEServerCallbacks
   void onConnect(BLEServer *pServer)
   {
     Serial.println("📱 Connected via BLE");
-    // FIX: pause background WiFi/HTTPS traffic for the duration of the BLE
-    // session so the radio is free for MTU negotiation / service discovery /
-    // the credentials write. NOTE: this callback runs on the BLE host
-    // stack's own task, not loop() — deliberately not touching WiFi here.
-    // Calling WiFi.disconnect() synchronously from this task blocked long
-    // enough (NVS/event-queue waits) to make the stack miss the MTU
-    // exchange's timing window, which caused the very timeout this is
-    // supposed to prevent. The actual WiFi pause/resume happens in loop(),
-    // see wifiPausedForBle below.
     bleClientConnected = true;
   }
 
   void onDisconnect(BLEServer *pServer)
   {
     Serial.println("📱 Disconnected from BLE");
-    bleClientConnected = false; // FIX: resume normal WiFi/HTTPS activity
+    bleClientConnected = false;
+    bleRxBuffer = ""; // discard any partial payload from the dropped session
 
     if (!startWifiSetup && WiFi.status() != WL_CONNECTED)
     {
-      pServer->getAdvertising()->start();
+      needsAdvertisingRestart = true;
+      advertisingRestartAt = millis() + 400;
     }
   }
 };
@@ -216,14 +217,36 @@ class WriteCallback : public BLECharacteristicCallbacks
 {
   void onWrite(BLECharacteristic *pChar) override
   {
-    String value = pChar->getValue();
-    if (value.length() == 0)
+    String chunk = pChar->getValue();
+    if (chunk.length() == 0)
       return;
+
+    // The phone falls back to ~20-byte chunks when MTU negotiation fails, so
+    // the full JSON payload usually arrives across several onWrite() calls.
+    // A trailing '\n' (never present inside valid JSON output) marks the end.
+    bleRxBuffer += chunk;
+
+    if (bleRxBuffer.length() > 2048)
+    {
+      Serial.println("⚠️ BLE RX buffer overflow — discarding");
+      bleRxBuffer = "";
+      return;
+    }
+
+    int newlineIdx = bleRxBuffer.indexOf('\n');
+    if (newlineIdx == -1)
+      return; // wait for the remaining chunks
+
+    String message = bleRxBuffer.substring(0, newlineIdx);
+    bleRxBuffer = bleRxBuffer.substring(newlineIdx + 1);
 
     StaticJsonDocument<512> doc;
 
-    if (deserializeJson(doc, value))
+    if (deserializeJson(doc, message))
+    {
+      Serial.println("❌ Failed to parse provisioning payload");
       return;
+    }
 
     savedName = doc["name"] | "";
     savedSSID = doc["ssid"] | "";
@@ -296,8 +319,7 @@ void handleWifiSetup()
     pServer->getAdvertising()->stop();
 
   stopBLE();
-  bleClientConnected = false; // FIX: BLE is fully torn down here, so this must be reset too
-  wifiPausedForBle = false;   // about to WiFi.begin() with fresh credentials below anyway
+  bleClientConnected = false; // BLE is fully torn down here, so this must be reset too
 
   WiFi.disconnect(true);
   delay(500);
@@ -372,7 +394,13 @@ void setup()
   characteristic->setCallbacks(new WriteCallback());
 
   service->start();
-  BLEDevice::getAdvertising()->start();
+
+  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+  // Wider preferred connection interval range makes the initial connection
+  // less sensitive to Android's timing, reducing spurious 133 disconnects.
+  pAdvertising->setMinPreferred(0x06);
+  pAdvertising->setMinPreferred(0x12);
+  pAdvertising->start();
 
   Serial.println("📡 Ready for BLE connections");
 }
@@ -382,62 +410,44 @@ void setup()
 // =====================
 void loop()
 {
+  if (needsAdvertisingRestart && millis() >= advertisingRestartAt)
+  {
+    needsAdvertisingRestart = false;
+    if (pServer && !bleStopped)
+      pServer->getAdvertising()->start();
+  }
+
   if (startWifiSetup)
   {
     startWifiSetup = false;
     handleWifiSetup();
   }
 
-  // FIX: while a phone is connected over BLE, skip all WiFi/HTTPS activity
-  // below so the radio stays free for the BLE session (MTU negotiation,
-  // service discovery, credential write). Everything resumes automatically
-  // once onDisconnect() fires.
-  if (bleClientConnected)
-  {
-    // FIX: a WiFi STA association still in progress (e.g. the auto-reconnect
-    // kicked off from setup() using saved credentials) keeps using the radio
-    // even though loop() itself is paused, since that reconnect is driven by
-    // the ESP-IDF WiFi task, not our loop(). That contention was starving
-    // the BLE controller enough that the phone's MTU request timed out.
-    // Done here (main loop task), not in the BLE callback, since calling
-    // WiFi APIs directly from the BLE stack's own task blocked long enough
-    // to cause the very timeout this is meant to avoid.
-    if (!wifiPausedForBle && WiFi.status() != WL_CONNECTED)
-    {
-      WiFi.disconnect();
-      wifiPausedForBle = true;
-    }
-    delay(100);
-    return;
-  }
-
-  if (wifiPausedForBle)
-  {
-    // FIX: resume the WiFi connection we paused for the BLE session, unless
-    // we're about to (re)connect with fresh credentials anyway.
-    wifiPausedForBle = false;
-    if (!startWifiSetup && savedSSID.length() > 0)
-    {
-      WiFi.reconnect();
-    }
-  }
-
   if (WiFi.status() == WL_CONNECTED)
   {
     wasConnected = true;
 
-    // Send periodic telemetry every 60 seconds
-    if (millis() - lastUpdate > 60000)
+    // Skip *starting new* blocking HTTP calls while a phone is connected
+    // over BLE — a network hiccup right then can make one of these calls
+    // block for its full timeout, starving the BLE controller of radio time
+    // during MTU negotiation/service discovery. This doesn't touch the WiFi
+    // connection itself, and a call already in-flight when the BLE central
+    // connected is left to finish (bounded by its own short timeout below).
+    if (!bleClientConnected)
     {
-      lastUpdate = millis();
-      sendMeasurement();
-    }
+      // Send periodic telemetry every 60 seconds
+      if (millis() - lastUpdate > 60000)
+      {
+        lastUpdate = millis();
+        sendMeasurement();
+      }
 
-    // Check for incoming remote commands every 2 seconds
-    if (millis() - lastCommandCheck > 2000)
-    {
-      lastCommandCheck = millis();
-      checkRemoteCommand();
+      // Check for incoming remote commands every 2 seconds
+      if (millis() - lastCommandCheck > 2000)
+      {
+        lastCommandCheck = millis();
+        checkRemoteCommand();
+      }
     }
   }
   else

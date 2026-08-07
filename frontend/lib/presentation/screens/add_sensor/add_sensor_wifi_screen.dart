@@ -42,18 +42,24 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
   List<WifiNetwork> networks = [];
   bool _obscurePassword = true;
 
+  StreamSubscription<BluetoothConnectionState>? _connStateSub;
+  bool _unexpectedlyDisconnected = false;
+
   @override
   void initState() {
     super.initState();
     scanWifi();
   }
 
+  @override
+  void dispose() {
+    _connStateSub?.cancel();
+    super.dispose();
+  }
+
   // Scans for localized physical 2.4GHz infrastructure router bands
   Future<void> scanWifi() async {
     try {
-      // Android requires ACCESS_FINE_LOCATION to be granted at runtime before
-      // WifiManager will return any scan results, regardless of whether the
-      // config screen already asked for it (it only does for outdoor sensors).
       if (Platform.isAndroid) {
         LocationPermission permission = await Geolocator.checkPermission();
         if (permission == LocationPermission.denied) {
@@ -94,7 +100,7 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
     }
   }
 
-  // Orchestrates the critical BLE handshake and delegates device onboarding to local ESP32 runtime
+  // Orchestrates the critical BLE handshake and delegates device onboarding
   Future<void> _handleFinish() async {
     if (ssid == null || isLoading) return;
 
@@ -103,19 +109,24 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
       loadingStatusText = "Establishing BLE connection...";
     });
 
+    await _connStateSub?.cancel();
+    _connStateSub = null;
+
     try {
-      // 1. Establish the BLE connection, retrying a couple of times if the
-      // handshake times out. This is usually transient radio contention on
-      // the ESP32 (its WiFi and BLE share one radio) rather than a
-      // permanent failure, so a fresh disconnect/reconnect cycle tends to
-      // succeed once the contention clears.
       const maxConnectAttempts = 3;
+      BluetoothCharacteristic? targetChar;
+      // Conservative default: the un-negotiated Android ATT MTU is 23 bytes,
+      // leaving 20 usable payload bytes after the 3-byte ATT header.
+      int mtuPayloadLimit = 20;
+
       for (int attempt = 1; attempt <= maxConnectAttempts; attempt++) {
         // Proactively cycle connection state to bypass Android status-133 errors
+        await _connStateSub?.cancel();
+        _connStateSub = null;
         try {
           await widget.device.disconnect();
-          await Future.delayed(const Duration(milliseconds: 500));
         } catch (_) {}
+        await Future.delayed(const Duration(milliseconds: 800));
 
         setState(() {
           loadingStatusText = attempt == 1
@@ -124,50 +135,96 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
         });
 
         try {
+          // 1. Connect without forcing MTU upfront
           await widget.device.connect(
-            timeout: const Duration(seconds: 15),
+            timeout: const Duration(seconds: 10),
             autoConnect: false,
           );
-          break;
+
+          // Don't trust the connect() future alone on Android — wait for the
+          // platform to actually report a connected state before touching
+          // GATT, then keep listening so a mid-transfer drop can be detected
+          // instead of hanging or throwing an opaque platform exception.
+          _unexpectedlyDisconnected = false;
+          await widget.device.connectionState
+              .firstWhere((s) => s == BluetoothConnectionState.connected)
+              .timeout(const Duration(seconds: 5));
+
+          _connStateSub = widget.device.connectionState.listen((state) {
+            if (state == BluetoothConnectionState.disconnected) {
+              _unexpectedlyDisconnected = true;
+            }
+          });
+
+          // Allow Android GATT layer to stabilize
+          await Future.delayed(const Duration(milliseconds: 600));
+
+          setState(() {
+            loadingStatusText = "Locating device configuration protocols...";
+          });
+
+          // 2. DISCOVER SERVICES FIRST (Crucial order fix)
+          var services = await widget.device.discoverServices();
+
+          // Extract native Nordic UART service interface pipelines
+          for (var s in services) {
+            if (s.uuid.toString().toUpperCase().contains("6E400001")) {
+              for (var c in s.characteristics) {
+                if (c.uuid.toString().toUpperCase().contains("6E400002")) {
+                  targetChar = c;
+                }
+              }
+            }
+          }
+
+          if (targetChar == null) {
+            throw Exception("Required BLE Characteristic not exposed.");
+          }
+
+          // 3. OPTIONAL: Safely optimize connection parameters after services are discovered
+          if (Platform.isAndroid) {
+            try {
+              await widget.device.requestConnectionPriority(
+                connectionPriorityRequest: ConnectionPriority.high,
+              );
+              await Future.delayed(const Duration(milliseconds: 200));
+            } catch (_) {}
+
+            try {
+              await widget.device
+                  .requestMtu(223)
+                  .timeout(const Duration(seconds: 3));
+              await Future.delayed(const Duration(milliseconds: 200));
+            } catch (mtuErr) {
+              print(
+                "⚠️ MTU negotiation timed out/failed — falling back to 20-byte chunked writes: $mtuErr",
+              );
+            }
+          }
+
+          // Use whatever MTU actually got negotiated (falls back to the
+          // conservative 20-byte default declared above if it never changed).
+          final negotiatedMtu = widget.device.mtuNow;
+          if (negotiatedMtu > 23) {
+            mtuPayloadLimit = negotiatedMtu - 3;
+          }
+
+          break; // Handshake succeeded!
         } catch (e) {
+          print("⚠️ BLE Handshake Attempt $attempt failed: $e");
+          await _connStateSub?.cancel();
+          _connStateSub = null;
           if (attempt == maxConnectAttempts) rethrow;
         }
       }
 
-      if (Platform.isAndroid) {
-        setState(
-          () => loadingStatusText = "Optimizing data packet size (MTU)...",
-        );
-        await widget.device.requestMtu(223).catchError((_) => 0);
-      }
-
-      setState(() {
-        loadingStatusText = "Locating device configuration protocols...";
-      });
-
-      var services = await widget.device.discoverServices();
-      BluetoothCharacteristic? targetChar;
-
-      // Extract native Nordic UART service interface pipelines
-      for (var s in services) {
-        if (s.uuid.toString().toUpperCase().contains("6E400001")) {
-          for (var c in s.characteristics) {
-            if (c.uuid.toString().toUpperCase().contains("6E400002")) {
-              targetChar = c;
-            }
-          }
-        }
-      }
-
-      if (targetChar == null) {
-        throw Exception("Required BLE Characteristic not exposed.");
-      }
+      final resolvedChar = targetChar!;
 
       setState(() {
         loadingStatusText = "Provisioning network credentials over BLE...";
       });
 
-      // 2. Wrap properties into uniform target payload package (including GPS coordinates)
+      // Wrap properties into uniform target payload package
       final payload = {
         "sensor_id": widget.device.remoteId.toString(),
         "name": widget.sensorName,
@@ -180,36 +237,48 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
         "password": password,
       };
 
-      // 3. Dispatch data down to the ESP32 storage buffer
-      await targetChar.write(
-        utf8.encode(jsonEncode(payload)),
-        withoutResponse: false,
-      );
+      // '\n' terminates the message so the ESP32 can reassemble chunks; it
+      // never occurs raw inside jsonEncode's output (newlines in string
+      // values are escaped as the two characters \ and n).
+      final payloadBytes = utf8.encode("${jsonEncode(payload)}\n");
 
-      // 4. Terminate BLE interface so the ESP32 is free to join WiFi and register itself
-      await widget.device.disconnect();
+      // Dispatch data down to the ESP32 storage buffer, chunked to whatever
+      // MTU was actually negotiated so a single oversized write can't get
+      // silently truncated or tear down the GATT connection.
+      await _writeChunked(resolvedChar, payloadBytes, mtuPayloadLimit);
+
+      // Give the peripheral a beat to finish processing the last chunk
+      // before we tear the link down — each chunk write already awaits its
+      // ATT write response, this is just extra headroom for the firmware's
+      // own JSON parse to run before the radio goes away.
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      await _connStateSub?.cancel();
+      _connStateSub = null;
+
+      // Terminate BLE interface so ESP32 is free to join WiFi
+      try {
+        await widget.device.disconnect();
+      } catch (_) {}
 
       setState(() {
         loadingStatusText = "Waiting for hardware to come online...";
       });
 
-      // 5. Poll the backend until the newly provisioned sensor shows up (the ESP32
-      // needs time to join WiFi and POST its registration) instead of assuming a
-      // fixed 2s delay is enough, which raced ahead of the hardware and made the
-      // sensor missing from the dashboard until the app was restarted.
+      // Poll backend until the sensor registers
       if (mounted) {
         final dashboardState = context.read<DashboardState>();
-        final deadline = DateTime.now().add(const Duration(seconds: 30));
+        final deadline = DateTime.now().add(const Duration(seconds: 8));
         while (mounted && DateTime.now().isBefore(deadline)) {
           await dashboardState.loadSensors(force: true);
           if (dashboardState.sensors.any((s) => s.name == widget.sensorName)) {
             break;
           }
-          await Future.delayed(const Duration(seconds: 2));
+          await Future.delayed(const Duration(seconds: 1));
         }
       }
 
-      // 6. Navigate to success screen
+      // Navigate to success screen
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,
@@ -230,7 +299,42 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
         );
       }
     } finally {
+      await _connStateSub?.cancel();
+      _connStateSub = null;
       if (mounted) setState(() => isLoading = false);
+    }
+  }
+
+  // Writes [bytes] to [char] in sequential chunks no larger than [chunkSize],
+  // awaiting each chunk's ATT write response before sending the next. This
+  // is what makes both MTU-negotiation failure and oversized single writes
+  // safe: on Android, a write() larger than the negotiated MTU can silently
+  // truncate or tear down the GATT connection instead of erroring cleanly.
+  Future<void> _writeChunked(
+    BluetoothCharacteristic char,
+    List<int> bytes,
+    int chunkSize,
+  ) async {
+    final safeChunkSize = chunkSize.clamp(20, 512);
+    for (int offset = 0; offset < bytes.length; offset += safeChunkSize) {
+      if (_unexpectedlyDisconnected) {
+        throw Exception("BLE device disconnected mid-transfer.");
+      }
+      final end = (offset + safeChunkSize < bytes.length)
+          ? offset + safeChunkSize
+          : bytes.length;
+
+      await char
+          .write(bytes.sublist(offset, end), withoutResponse: false)
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () =>
+                throw Exception("BLE write timed out mid-transfer."),
+          );
+
+      // Brief pacing gap so the ESP32 BLE stack's internal queue isn't
+      // overrun by back-to-back writes.
+      await Future.delayed(const Duration(milliseconds: 30));
     }
   }
 
@@ -279,7 +383,6 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
                   ),
                   const SizedBox(height: 28),
 
-                  // Interactive Form Input Enclosure
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
@@ -295,7 +398,6 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
                     ),
                     child: Column(
                       children: [
-                        // SSID Network Selection Field
                         DropdownButtonFormField<String>(
                           isExpanded: true,
                           value: networks.any((n) => n.ssid == ssid)
@@ -321,7 +423,6 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
                         ),
                         const SizedBox(height: 20),
 
-                        // Encrypted Password Input Field
                         TextField(
                           obscureText: _obscurePassword,
                           onChanged: (v) => password = v,
@@ -352,7 +453,6 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
                   ),
                   const Spacer(),
 
-                  // Execute dynamic configuration submission sequence
                   SizedBox(
                     width: double.infinity,
                     height: 54,
@@ -382,7 +482,6 @@ class _AddSensorWifiScreenState extends State<AddSensorWifiScreen> {
             ),
           ),
 
-          // Fullscreen blocking process modal overlay to shield UI during network injection
           if (isLoading)
             Container(
               color: Colors.black.withOpacity(0.6),

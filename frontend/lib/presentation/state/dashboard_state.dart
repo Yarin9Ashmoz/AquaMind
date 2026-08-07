@@ -99,7 +99,7 @@ class DashboardState extends ChangeNotifier {
         'https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current_weather=true',
       );
 
-      final response = await http.get(url).timeout(const Duration(seconds: 6));
+      final response = await http.get(url).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
