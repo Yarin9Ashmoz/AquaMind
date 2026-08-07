@@ -66,7 +66,8 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
           IconButton(
             icon: const Icon(Icons.tune_rounded, size: 22),
             tooltip: "Edit plant configuration",
-            onPressed: () => _showEditConfigDialog(context, state, currentSensor),
+            onPressed: () =>
+                _showEditConfigDialog(context, state, currentSensor),
           ),
           IconButton(
             icon: const Icon(
@@ -286,7 +287,11 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
             ),
             if (onTap != null) ...[
               const SizedBox(width: 6),
-              Icon(Icons.chevron_right_rounded, size: 18, color: Colors.grey[400]),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: Colors.grey[400],
+              ),
             ],
           ],
         ),
@@ -306,6 +311,7 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
     try {
       final DateTime? previousUpdate = currentSensor.lastUpdate;
 
+      // Send the trigger request to the server
       await state.requestMeasurement(currentSensor.sensorId!);
 
       if (mounted) {
@@ -318,10 +324,13 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
       }
 
       bool updated = false;
-      const int maxRetries = 12;
+      const int maxRetries = 10;
 
+      // Accelerated polling loop: Checks every 300ms for the first 3 attempts
       for (int i = 0; i < maxRetries; i++) {
-        await Future.delayed(const Duration(seconds: 1));
+        final int delayMs = (i < 3) ? 300 : 1000;
+        await Future.delayed(Duration(milliseconds: delayMs));
+
         await state.fetchSensors();
 
         final updatedSensor = state.sensors.firstWhere(
@@ -329,6 +338,7 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
           orElse: () => currentSensor,
         );
 
+        // Exit immediately once a new timestamp is received
         if (updatedSensor.lastUpdate != previousUpdate) {
           updated = true;
           break;
@@ -496,7 +506,9 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (dialogContext, setDialogState) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             title: const Text("Edit Plant Configuration"),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -511,7 +523,10 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
                   ),
                   items: const [
                     DropdownMenuItem(value: "pot", child: Text("Potted Plant")),
-                    DropdownMenuItem(value: "garden", child: Text("Open Garden")),
+                    DropdownMenuItem(
+                      value: "garden",
+                      child: Text("Open Garden"),
+                    ),
                   ],
                   onChanged: (v) => setDialogState(() => plantType = v!),
                 ),
@@ -525,8 +540,14 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
                     ),
                   ),
                   items: const [
-                    DropdownMenuItem(value: "indoor", child: Text("Indoor Structure")),
-                    DropdownMenuItem(value: "outdoor", child: Text("Outdoor Field")),
+                    DropdownMenuItem(
+                      value: "indoor",
+                      child: Text("Indoor Structure"),
+                    ),
+                    DropdownMenuItem(
+                      value: "outdoor",
+                      child: Text("Outdoor Field"),
+                    ),
                   ],
                   onChanged: (v) => setDialogState(() => locationType = v!),
                 ),
@@ -535,8 +556,7 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
                   initialValue: dryToleranceDays,
                   decoration: InputDecoration(
                     labelText: "Dry Tolerance Window",
-                    helperText:
-                        "Maximum continuous days allowed without water",
+                    helperText: "Maximum continuous days allowed without water",
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -545,7 +565,9 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
                       .map(
                         (v) => DropdownMenuItem(
                           value: v,
-                          child: Text(v == 0 ? "No delay (Immediate Alert)" : "$v Days"),
+                          child: Text(
+                            v == 0 ? "No delay (Immediate Alert)" : "$v Days",
+                          ),
                         ),
                       )
                       .toList(),
@@ -564,7 +586,10 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
             actions: [
               TextButton(
                 onPressed: isSaving ? null : () => Navigator.pop(dialogContext),
-                child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+                child: const Text(
+                  "Cancel",
+                  style: TextStyle(color: Colors.grey),
+                ),
               ),
               TextButton(
                 onPressed: isSaving
@@ -580,13 +605,16 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
                             dryToleranceDays: dryToleranceDays,
                             moisture: sensor.moisture,
                           );
-                          if (dialogContext.mounted) Navigator.pop(dialogContext);
+                          if (dialogContext.mounted)
+                            Navigator.pop(dialogContext);
                         } catch (e) {
                           setDialogState(() => isSaving = false);
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text("Failed to update configuration: $e"),
+                                content: Text(
+                                  "Failed to update configuration: $e",
+                                ),
                                 backgroundColor: Colors.redAccent,
                               ),
                             );
@@ -599,7 +627,10 @@ class _SensorDetailsScreenState extends State<SensorDetailsScreen> {
                         height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text("Save", style: TextStyle(fontWeight: FontWeight.bold)),
+                    : const Text(
+                        "Save",
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
               ),
             ],
           ),

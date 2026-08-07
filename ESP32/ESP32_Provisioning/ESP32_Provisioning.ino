@@ -205,7 +205,7 @@ class MyServerCallbacks : public BLEServerCallbacks
     if (!startWifiSetup && WiFi.status() != WL_CONNECTED)
     {
       needsAdvertisingRestart = true;
-      advertisingRestartAt = millis() + 400;
+      advertisingRestartAt = millis() + 1000;
     }
   }
 };
@@ -361,26 +361,19 @@ void setup()
   Serial.begin(115200);
   analogReadResolution(12);
 
-  prefs.begin("sensor", true);
-  String ssid = prefs.getString("ssid", "");
-  String pass = prefs.getString("password", "");
+  // 1. Completely erase any previously saved WiFi credentials from NVS memory
+  prefs.begin("sensor", false); // Open preferences in read-write mode (false)
+  prefs.clear();                // Clears saved "ssid" and "password" entries
   prefs.end();
 
-  if (ssid != "")
-  {
-    savedSSID = ssid;
-    savedPassword = pass;
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid.c_str(), pass.c_str());
-    Serial.printf("📶 Found saved WiFi credentials for \"%s\" — auto-connecting in background\n", ssid.c_str());
-  }
-  else
-  {
-    Serial.println("📶 No saved WiFi credentials — skipping auto-connect");
-  }
+  // 2. Completely disable the WiFi radio to prevent background connection attempts
+  WiFi.disconnect(true, true);
+  WiFi.mode(WIFI_OFF);
 
+  Serial.println("🧹 Memory cleared! Starting fresh BLE Provisioning...");
+
+  // 3. Initialize BLE in a completely clean environment
   BLEDevice::init("AquaMind Sensor");
-  BLEDevice::setMTU(512);
 
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
@@ -396,15 +389,12 @@ void setup()
   service->start();
 
   BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
-  // Wider preferred connection interval range makes the initial connection
-  // less sensitive to Android's timing, reducing spurious 133 disconnects.
-  pAdvertising->setMinPreferred(0x06);
-  pAdvertising->setMinPreferred(0x12);
-  pAdvertising->start();
+  pAdvertising->addServiceUUID(SERVICE_UUID);
+  pAdvertising->setScanResponse(true);
+  BLEDevice::startAdvertising();
 
   Serial.println("📡 Ready for BLE connections");
 }
-
 // =====================
 // LOOP
 // =====================
